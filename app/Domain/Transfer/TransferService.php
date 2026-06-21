@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Transfer;
+
+use App\Domain\Ledger\LedgerLeg;
+use App\Domain\Ledger\LedgerService;
+use App\Domain\Money\Money;
+use App\Domain\Transfer\Exceptions\SelfTransferException;
+use App\Domain\Wallet\Exceptions\WalletNotFoundException;
+use App\Models\Transfer;
+use App\Models\User;
+use App\Models\Wallet;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+final class TransferService
+{
+    public function __construct(private readonly LedgerService $ledger) {}
+
+    public function transfer(User $sender, int $toWalletId, int $amount, string $currency): Transfer
+    {
+        $from = $this->resolveSenderWallet($sender, $currency);
+        $to = Wallet::query()->findOrFail($toWalletId);
+
+        if ($from->is($to)) {
+            throw SelfTransferException::make();
+        }
+
+        $money = Money::of($amount, $currency);
+
+        return DB::transaction(function () use ($from, $to, $money): Transfer {
+            $transfer = Transfer::create([
+                'reference' => (string) Str::uuid(),
+                'from_wallet_id' => $from->getKey(),
+                'to_wallet_id' => $to->getKey(),
+                'amount' => $money,
+                'status' => TransferStatus::Completed,
+            ]);
+
+            $this->ledger->post($transfer, [
+                LedgerLeg::debit($from, $money),
+                LedgerLeg::credit($to, $money),
+            ]);
+
+            return $transfer;
+        }, attempts: 3);
+    }
+
+    private function resolveSenderWallet(User $sender, string $currency): Wallet
+    {
+        $wallet = Wallet::query()
+            ->where('user_id', $sender->getKey())
+            ->where('currency', $currency)
+            ->first();
+
+        if ($wallet === null) {
+            throw WalletNotFoundException::forOwnerCurrency($sender->getKey(), $currency);
+        }
+
+        return $wallet;
+    }
+}
