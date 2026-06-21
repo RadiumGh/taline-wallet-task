@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\MoneyCast;
+use App\Domain\Wallet\WalletType;
 use Database\Factories\WalletFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,10 +18,13 @@ class Wallet extends Model
 
     protected $fillable = [
         'user_id',
+        'type',
+        'code',
         'currency',
     ];
 
     protected $attributes = [
+        'type' => 'user',
         'balance' => 0,
         'version' => 0,
     ];
@@ -28,6 +32,7 @@ class Wallet extends Model
     protected function casts(): array
     {
         return [
+            'type' => WalletType::class,
             'balance' => MoneyCast::class,
             'version' => 'integer',
         ];

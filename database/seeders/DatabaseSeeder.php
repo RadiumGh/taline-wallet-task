@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        $this->call(SystemAccountsSeeder::class);
+
         $alice = User::factory()->create([
             'name' => 'Alice',
             'email' => 'alice@example.com',

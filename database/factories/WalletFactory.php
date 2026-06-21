@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Wallet\WalletType;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -19,7 +20,17 @@ class WalletFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
+            'type' => WalletType::User->value,
             'currency' => 'IRR',
         ];
+    }
+
+    public function system(string $code = 'gateway_clearing'): static
+    {
+        return $this->state(fn (): array => [
+            'user_id' => null,
+            'type' => WalletType::System->value,
+            'code' => $code,
+        ]);
     }
 }
