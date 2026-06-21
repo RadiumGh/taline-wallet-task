@@ -15,7 +15,7 @@ function secondConnection(): ConnectionInterface
 }
 
 afterEach(function (): void {
-    DB::table('users')->truncate();
+    $this->truncateTablesForAllConnections();
 });
 
 test('rows committed on one connection are visible to a separate connection', function () {
