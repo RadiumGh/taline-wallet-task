@@ -8,5 +8,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.header')->group(function (): void {
     Route::get('/ping', PingController::class)->name('ping');
-    Route::post('/transfers', [TransferController::class, 'store'])->name('transfers.store');
+    Route::post('/transfers', [TransferController::class, 'store'])
+        ->middleware('idempotency')
+        ->name('transfers.store');
 });

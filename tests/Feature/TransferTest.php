@@ -7,6 +7,7 @@ use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Wallet;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
 function fundedWalletFor(User $user, int $balance, string $currency = 'IRR'): Wallet
@@ -21,6 +22,7 @@ function fundedWalletFor(User $user, int $balance, string $currency = 'IRR'): Wa
 function transferRequest(User $sender, array $payload): TestResponse
 {
     return test()->withHeader('X-User-Id', (string) $sender->getKey())
+        ->withHeader('Idempotency-Key', (string) Str::uuid())
         ->postJson('/api/transfers', $payload);
 }
 

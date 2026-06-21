@@ -2,58 +2,12 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Money;
 use App\Domain\Transfer\TransferService;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\DB;
-
-function runInParallel(int $workers, Closure $task): void
-{
-    $startAt = microtime(true) + 0.3;
-    $pids = [];
-
-    for ($i = 0; $i < $workers; $i++) {
-        $pid = pcntl_fork();
-
-        if ($pid === -1) {
-            throw new RuntimeException('Unable to fork a worker process.');
-        }
-
-        if ($pid === 0) {
-            DB::purge();
-
-            $remaining = $startAt - microtime(true);
-            if ($remaining > 0) {
-                usleep((int) ($remaining * 1_000_000));
-            }
-
-            try {
-                $task($i);
-            } catch (Throwable) {
-            }
-
-            posix_kill(getmypid(), SIGKILL);
-        }
-
-        $pids[] = $pid;
-    }
-
-    foreach ($pids as $pid) {
-        pcntl_waitpid($pid, $status);
-    }
-}
-
-function fundedWallet(User $owner, int $balance, string $currency = 'IRR'): Wallet
-{
-    $wallet = Wallet::factory()->for($owner)->create(['currency' => $currency]);
-    $wallet->balance = Money::of($balance, $currency);
-    $wallet->save();
-
-    return $wallet->refresh();
-}
 
 function ledgerDelta(Wallet $wallet): int
 {

@@ -3,6 +3,7 @@
 use App\Exceptions\Contracts\HasHttpStatus;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\AuthenticateWithUserHeader;
+use App\Http\Middleware\EnforceIdempotency;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'auth.header' => AuthenticateWithUserHeader::class,
+            'idempotency' => EnforceIdempotency::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

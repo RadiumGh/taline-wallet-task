@@ -18,4 +18,8 @@ return [
     'gateway' => [
         'secret' => env('WALLET_GATEWAY_SECRET', ''),
     ],
+
+    'idempotency' => [
+        'ttl_minutes' => (int) env('WALLET_IDEMPOTENCY_TTL_MINUTES', 1440),
+    ],
 ];
