@@ -7,6 +7,29 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Testing (real MySQL)
+
+Tests run against a real MySQL schema, not SQLite, so locks, unique/CHECK constraints, and deadlock
+behaviour are genuinely exercised. Create the dedicated test schema once (admin grants `radium`
+access to it):
+
+```bash
+mysql -uradium -pRadiumGh76 -h127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS taline_wallet_task_test"
+```
+
+`phpunit.xml` points the suite at `taline_wallet_task_test` over `127.0.0.1`. Run it with:
+
+```bash
+php artisan test
+```
+
+Test isolation:
+
+- **Unit / Feature** suites use transactional `RefreshDatabase` (fast, rolled back per test).
+- The **Concurrency** suite uses non-transactional `DatabaseTruncation`, because real parallel
+  clients need committed rows visible across separate connections — a wrapping transaction would
+  hide them. Each run starts from a clean schema, so runs never see each other's data.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
