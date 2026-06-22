@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Money\Money;
+use App\Domain\Transfer\TransferService;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\User;
@@ -139,4 +140,19 @@ test('the transfer endpoint requires authentication', function () {
     ]);
 
     $response->assertUnauthorized();
+});
+
+test('repeating a transfer with the same key moves money once even below the HTTP layer', function () {
+    $sender = User::factory()->create();
+    $from = fundedWalletFor($sender, 1000);
+    $to = Wallet::factory()->create(['currency' => 'IRR']);
+
+    $first = app(TransferService::class)->transfer($sender, $to->getKey(), 400, 'IRR', 'same-key');
+    $second = app(TransferService::class)->transfer($sender, $to->getKey(), 400, 'IRR', 'same-key');
+
+    expect($second->is($first))->toBeTrue()
+        ->and(Transfer::query()->count())->toBe(1)
+        ->and($from->refresh()->balance->amount)->toBe(600)
+        ->and($to->refresh()->balance->amount)->toBe(400)
+        ->and(LedgerEntry::query()->count())->toBe(2);
 });

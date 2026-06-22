@@ -113,8 +113,8 @@ constraints, and idempotency — not from raising the isolation level.
    payload, a different payload under the same key is `409`. Transient 5xx releases the key so a
    genuine retry can proceed.
 2. **DB unique constraints** — `deposits (wallet_id, idempotency_key)`,
-   `gateway_callbacks (gateway, event_id)`, `ledger_entries (reference, wallet)`,
-   `outbox_events (dedupe_key)`.
+   `transfers (from_wallet_id, idempotency_key)`, `gateway_callbacks (gateway, event_id)`,
+   `ledger_entries (reference, wallet)`, `outbox_events (dedupe_key)`.
 3. **State machines** — `canTransitionTo()` guards; duplicate terminal callbacks are no-ops.
 4. **Ledger identity** — the unique `(reference, wallet)` post guard is the final backstop.
 
@@ -177,9 +177,6 @@ carries an encoded cursor the client passes back; invalid cursors are rejected. 
 - **Money division/allocation** — `Money` is closed under add/subtract/negate only; there is no
   multiply/divide/allocate, so no rounding policy is exercised. The first proportional feature (fees,
   interest, splits) must add an explicit largest-remainder allocation API.
-- **Transfer business-row idempotency at the DB** — transfers are currently idempotent only at the
-  HTTP layer; `transfers.idempotency_key` exists but is nullable and unenforced. If the HTTP layer is
-  ever bypassed there is no DB backstop (unlike deposits). See tech-debt TD-006.
 - **Deep gateway reconciliation** — the *mechanism* (query stuck deposits → ask gateway → drive
   transition) is built and tested, but the production `SimulatedPaymentGateway::fetchStatus()` returns
   `Pending` (it has no real status endpoint); a real implementation would poll the provider's API.
@@ -212,8 +209,7 @@ The running list with risk and suggested fixes is in `ai-docs/todos/tech-debts.m
 ## What another week would add
 
 1. **Withdrawal flow** with fund reservation and an admin approve/settle state machine.
-2. **Close the transfer idempotency gap** (DB unique on the transfer row) and tighten API resources
-   to references-only.
+2. **Tighten API resources** to references-only (drop the raw sequential ids — TD-003).
 3. **Real gateway polling** in reconciliation, plus alerting on illegal transitions (fail-after-confirm).
 4. **Exactly-once metrics/logs** by emitting them from outbox consumers (after commit) instead of
    inside the money transaction, removing the deadlock-retry over-count (TD-008).

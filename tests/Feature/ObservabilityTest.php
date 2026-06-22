@@ -126,6 +126,7 @@ test('audit logs are append-only and reject modification', function () {
         'amount' => Money::of(1, 'IRR'),
         'currency' => 'IRR',
         'status' => 'completed',
+        'idempotency_key' => (string) Str::uuid(),
     ]);
     $audit = app(AuditLogger::class)->record('transfer.completed', $transfer);
 

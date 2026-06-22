@@ -8,6 +8,7 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 function ledgerDelta(Wallet $wallet): int
 {
@@ -30,7 +31,7 @@ test('parallel transfers from one wallet never overspend', function () {
     $receivers = Wallet::factory()->count(5)->create(['currency' => 'IRR']);
 
     runInParallel(5, function (int $i) use ($sender, $receivers): void {
-        app(TransferService::class)->transfer($sender, $receivers[$i]->getKey(), 100, 'IRR');
+        app(TransferService::class)->transfer($sender, $receivers[$i]->getKey(), 100, 'IRR', (string) Str::uuid());
     });
 
     expect($senderWallet->refresh()->balance->amount)->toBe(0)
@@ -56,8 +57,8 @@ test('concurrent opposing transfers keep the ledger balanced without deadlocking
 
         for ($n = 0; $n < $iterations; $n++) {
             $i === 0
-                ? $service->transfer($alice, $bobWallet->getKey(), 10, 'IRR')
-                : $service->transfer($bob, $aliceWallet->getKey(), 10, 'IRR');
+                ? $service->transfer($alice, $bobWallet->getKey(), 10, 'IRR', (string) Str::uuid())
+                : $service->transfer($bob, $aliceWallet->getKey(), 10, 'IRR', (string) Str::uuid());
         }
     });
 

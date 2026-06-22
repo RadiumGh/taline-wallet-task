@@ -29,7 +29,7 @@ function makeTransfer(int $amount = 400): Transfer
     fundedWallet($sender, 1000);
     $to = Wallet::factory()->create(['currency' => 'IRR']);
 
-    return app(TransferService::class)->transfer($sender, $to->getKey(), $amount, 'IRR');
+    return app(TransferService::class)->transfer($sender, $to->getKey(), $amount, 'IRR', (string) Str::uuid());
 }
 
 function relay(): int
@@ -72,7 +72,7 @@ test('a rolled-back money write leaves no outbox event', function () {
     fundedWallet($sender, 100);
     $to = Wallet::factory()->create(['currency' => 'IRR']);
 
-    expect(fn () => app(TransferService::class)->transfer($sender, $to->getKey(), 400, 'IRR'))
+    expect(fn () => app(TransferService::class)->transfer($sender, $to->getKey(), 400, 'IRR', (string) Str::uuid()))
         ->toThrow(InsufficientFundsException::class);
 
     expect(OutboxEvent::query()->count())->toBe(0)
@@ -141,6 +141,7 @@ test('the dedupe key prevents duplicate outbox rows', function () {
         'amount' => Money::of(100, 'IRR'),
         'currency' => 'IRR',
         'status' => TransferStatus::Completed,
+        'idempotency_key' => (string) Str::uuid(),
     ]);
     $recorder = app(OutboxRecorder::class);
 

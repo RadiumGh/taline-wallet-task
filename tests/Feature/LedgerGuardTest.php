@@ -23,6 +23,7 @@ function transferReference(Wallet $from, Wallet $to): Transfer
         'amount' => Money::of(100, 'IRR'),
         'currency' => 'IRR',
         'status' => TransferStatus::Completed,
+        'idempotency_key' => (string) Str::uuid(),
     ]);
 }
 

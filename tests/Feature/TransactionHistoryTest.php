@@ -22,6 +22,7 @@ function referenceModel(): Model
         'amount' => Money::of(1, 'IRR'),
         'currency' => 'IRR',
         'status' => 'completed',
+        'idempotency_key' => (string) Str::uuid(),
     ]);
 }
 
