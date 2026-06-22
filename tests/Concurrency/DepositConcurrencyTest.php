@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Domain\Deposit\DepositCallbackService;
 use App\Domain\Deposit\DepositStatus;
 use App\Domain\Deposit\GatewayCallbackData;
-use App\Domain\Money\Money;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
 use App\Models\LedgerEntry;
@@ -13,7 +12,6 @@ use App\Models\User;
 use App\Models\Wallet;
 use Database\Seeders\SystemAccountsSeeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 beforeEach(function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
@@ -36,15 +34,7 @@ function concurrentPendingDeposit(int $amount = 5000, string $currency = 'IRR'):
 {
     $wallet = Wallet::factory()->for(User::factory())->create(['currency' => $currency]);
 
-    return Deposit::create([
-        'reference' => (string) Str::uuid(),
-        'wallet_id' => $wallet->getKey(),
-        'amount' => Money::of($amount, $currency),
-        'currency' => $currency,
-        'status' => DepositStatus::Pending,
-        'gateway' => 'simulated',
-        'idempotency_key' => (string) Str::uuid(),
-    ]);
+    return Deposit::factory()->forWallet($wallet, $amount)->create();
 }
 
 function confirmData(string $eventId): GatewayCallbackData

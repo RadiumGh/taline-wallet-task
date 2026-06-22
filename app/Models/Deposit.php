@@ -6,12 +6,15 @@ namespace App\Models;
 
 use App\Casts\MoneyCast;
 use App\Domain\Deposit\DepositStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Deposit extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'reference',
         'wallet_id',

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Domain\Deposit\DepositCallbackService;
-use App\Domain\Deposit\DepositStatus;
 use App\Domain\Deposit\GatewayCallbackData;
 use App\Domain\Ledger\Exceptions\InsufficientFundsException;
 use App\Domain\Money\Money;
@@ -52,15 +51,7 @@ test('a completed transfer records exactly one pending outbox event', function (
 test('a confirmed deposit records a deposit.confirmed outbox event', function () {
     $this->seed(SystemAccountsSeeder::class);
     config()->set('wallet.gateway.secret', 'secret');
-    $deposit = Deposit::create([
-        'reference' => (string) Str::uuid(),
-        'wallet_id' => Wallet::factory()->for(User::factory())->create(['currency' => 'IRR'])->getKey(),
-        'amount' => Money::of(5000, 'IRR'),
-        'currency' => 'IRR',
-        'status' => DepositStatus::Pending,
-        'gateway' => 'simulated',
-        'idempotency_key' => (string) Str::uuid(),
-    ]);
+    $deposit = Deposit::factory()->create();
 
     $payload = ['event_id' => 'evt-1'];
     $raw = json_encode($payload);

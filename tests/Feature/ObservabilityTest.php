@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Domain\Deposit\DepositStatus;
 use App\Domain\Money\Money;
 use App\Domain\Observability\AuditLogger;
 use App\Domain\Observability\Exceptions\ImmutableAuditLogException;
@@ -41,15 +40,7 @@ function completeTransfer(): TestResponse
 function confirmDeposit(): array
 {
     config()->set('wallet.gateway.secret', 'secret');
-    $deposit = Deposit::create([
-        'reference' => (string) Str::uuid(),
-        'wallet_id' => Wallet::factory()->for(User::factory())->create(['currency' => 'IRR'])->getKey(),
-        'amount' => Money::of(5000, 'IRR'),
-        'currency' => 'IRR',
-        'status' => DepositStatus::Pending,
-        'gateway' => 'simulated',
-        'idempotency_key' => (string) Str::uuid(),
-    ]);
+    $deposit = Deposit::factory()->create();
     $payload = ['event_id' => 'evt-1'];
     $raw = json_encode($payload);
     $response = test()

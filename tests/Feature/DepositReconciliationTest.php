@@ -6,14 +6,12 @@ use App\Domain\Deposit\DepositReconciliationService;
 use App\Domain\Deposit\DepositStatus;
 use App\Domain\Gateway\GatewayOutcome;
 use App\Domain\Gateway\PaymentGateway;
-use App\Domain\Money\Money;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
 use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Models\Wallet;
 use Database\Seeders\SystemAccountsSeeder;
-use Illuminate\Support\Str;
 use Tests\Support\FakePaymentGateway;
 
 beforeEach(function (): void {
@@ -26,20 +24,9 @@ function stalePendingDeposit(int $amount = 5000, string $currency = 'IRR', int $
 {
     $wallet = Wallet::factory()->for(User::factory())->create(['currency' => $currency]);
 
-    $deposit = Deposit::create([
-        'reference' => (string) Str::uuid(),
-        'wallet_id' => $wallet->getKey(),
-        'amount' => Money::of($amount, $currency),
-        'currency' => $currency,
-        'status' => DepositStatus::Pending,
-        'gateway' => 'simulated',
-        'idempotency_key' => (string) Str::uuid(),
-    ]);
-
-    $deposit->created_at = now()->subMinutes($ageMinutes);
-    $deposit->save();
-
-    return $deposit;
+    return Deposit::factory()
+        ->forWallet($wallet, $amount)
+        ->create(['created_at' => now()->subMinutes($ageMinutes)]);
 }
 
 function gateway(): FakePaymentGateway

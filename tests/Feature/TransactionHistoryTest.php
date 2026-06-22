@@ -103,15 +103,7 @@ test('the reference_type filter narrows to one operation type', function () {
     $user = User::factory()->create();
     $wallet = Wallet::factory()->for($user)->create(['currency' => 'IRR']);
     $transfer = referenceModel();
-    $deposit = Deposit::create([
-        'reference' => (string) Str::uuid(),
-        'wallet_id' => $wallet->getKey(),
-        'amount' => Money::of(500, 'IRR'),
-        'currency' => 'IRR',
-        'status' => 'pending',
-        'gateway' => 'simulated',
-        'idempotency_key' => (string) Str::uuid(),
-    ]);
+    $deposit = Deposit::factory()->forWallet($wallet, 500)->create();
     historyEntry($wallet, 100, $transfer);
     historyEntry($wallet, 500, $deposit);
 

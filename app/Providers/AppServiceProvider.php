@@ -20,9 +20,4 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OutboxPublisher::class, QueueOutboxPublisher::class);
         $this->app->bind(MetricsRecorder::class, LogMetricsRecorder::class);
     }
-
-    public function boot(): void
-    {
-        //
-    }
 }
