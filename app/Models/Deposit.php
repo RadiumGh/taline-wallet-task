@@ -35,6 +35,11 @@ class Deposit extends Model
         ];
     }
 
+    public function getRouteKeyName(): string
+    {
+        return 'reference';
+    }
+
     public function wallet(): BelongsTo
     {
         return $this->belongsTo(Wallet::class);

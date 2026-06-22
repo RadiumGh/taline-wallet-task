@@ -9,6 +9,7 @@ use App\Domain\Ledger\Exceptions\UnbalancedLedgerPostException;
 use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
 use App\Domain\Money\Money;
+use App\Domain\Wallet\WalletType;
 use App\Models\LedgerEntry;
 use App\Models\Wallet;
 use Illuminate\Database\Eloquent\Collection;
@@ -36,7 +37,7 @@ final class LedgerService
 
                 $resultingBalance = $balances[$wallet->getKey()] + $leg->amount->amount;
 
-                if ($resultingBalance < 0) {
+                if ($resultingBalance < 0 && $wallet->type === WalletType::User) {
                     throw InsufficientFundsException::forWallet($wallet);
                 }
 
