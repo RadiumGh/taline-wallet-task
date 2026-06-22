@@ -13,7 +13,7 @@ use App\Domain\Wallet\SystemAccountResolver;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
 use Closure;
-use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 final class DepositCallbackService
@@ -106,12 +106,8 @@ final class DepositCallbackService
                 'payload' => $data->payload,
                 'signature' => $data->signature,
             ]);
-        } catch (QueryException $e) {
-            if ((string) $e->getCode() === '23000') {
-                return null;
-            }
-
-            throw $e;
+        } catch (UniqueConstraintViolationException) {
+            return null;
         }
     }
 }

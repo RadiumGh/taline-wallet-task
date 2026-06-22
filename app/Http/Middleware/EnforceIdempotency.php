@@ -9,7 +9,7 @@ use App\Domain\Idempotency\Exceptions\MissingIdempotencyKeyException;
 use App\Domain\Idempotency\IdempotencyStatus;
 use App\Models\IdempotencyKey;
 use Closure;
-use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -123,12 +123,8 @@ class EnforceIdempotency
                 'locked_at' => now(),
                 'expires_at' => now()->addMinutes((int) config('wallet.idempotency.ttl_minutes')),
             ]);
-        } catch (QueryException $e) {
-            if ($this->isUniqueViolation($e)) {
-                return null;
-            }
-
-            throw $e;
+        } catch (UniqueConstraintViolationException) {
+            return null;
         }
     }
 
@@ -156,10 +152,5 @@ class EnforceIdempotency
         $decoded = json_decode($content, true);
 
         return is_array($decoded) ? $decoded : null;
-    }
-
-    private function isUniqueViolation(QueryException $e): bool
-    {
-        return (string) $e->getCode() === '23000';
     }
 }

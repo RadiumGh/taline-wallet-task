@@ -11,7 +11,7 @@ use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Models\Deposit;
 use App\Models\User;
 use App\Models\Wallet;
-use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
 
 final class DepositService
@@ -42,12 +42,8 @@ final class DepositService
                 'gateway' => $gateway ?? config('wallet.gateway.default'),
                 'idempotency_key' => $idempotencyKey,
             ]);
-        } catch (QueryException $e) {
-            if ($this->isUniqueViolation($e)) {
-                return $this->findByKey($wallet, $idempotencyKey) ?? throw $e;
-            }
-
-            throw $e;
+        } catch (UniqueConstraintViolationException $e) {
+            return $this->findByKey($wallet, $idempotencyKey) ?? throw $e;
         }
     }
 
@@ -71,10 +67,5 @@ final class DepositService
             ->where('wallet_id', $wallet->getKey())
             ->where('idempotency_key', $idempotencyKey)
             ->first();
-    }
-
-    private function isUniqueViolation(QueryException $e): bool
-    {
-        return (string) $e->getCode() === '23000';
     }
 }

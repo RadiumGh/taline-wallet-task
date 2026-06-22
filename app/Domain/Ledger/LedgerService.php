@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Ledger;
 
 use App\Domain\Ledger\Exceptions\InsufficientFundsException;
+use App\Domain\Ledger\Exceptions\LedgerAlreadyPostedException;
 use App\Domain\Ledger\Exceptions\UnbalancedLedgerPostException;
 use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
@@ -14,6 +15,7 @@ use App\Models\LedgerEntry;
 use App\Models\Wallet;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -26,10 +28,22 @@ final class LedgerService
     {
         $this->assertBalanced($legs);
 
+        try {
+            return $this->commit($reference, $legs);
+        } catch (UniqueConstraintViolationException) {
+            throw LedgerAlreadyPostedException::forReference($reference);
+        }
+    }
+
+    /**
+     * @param  list<LedgerLeg>  $legs
+     */
+    private function commit(Model $reference, array $legs): string
+    {
         return DB::transaction(function () use ($reference, $legs): string {
             $wallets = $this->lockWallets($legs);
             $transactionGroup = (string) Str::uuid();
-            $balances = $wallets->map(fn (Wallet $wallet): int => $wallet->balance->amount)->all();
+            $balances = $wallets->map(fn(Wallet $wallet): int => $wallet->balance->amount)->all();
 
             foreach ($legs as $leg) {
                 $wallet = $wallets->get($leg->wallet->getKey());
@@ -70,7 +84,7 @@ final class LedgerService
     private function lockWallets(array $legs): Collection
     {
         $walletIds = collect($legs)
-            ->map(fn (LedgerLeg $leg): int => $leg->wallet->getKey())
+            ->map(fn(LedgerLeg $leg): int => $leg->wallet->getKey())
             ->unique()
             ->sort()
             ->values()
@@ -99,7 +113,7 @@ final class LedgerService
             $total = $total->plus($leg->amount);
         }
 
-        if (! $total->isZero()) {
+        if (!$total->isZero()) {
             throw UnbalancedLedgerPostException::notZero($total);
         }
     }
