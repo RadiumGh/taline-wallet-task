@@ -12,3 +12,8 @@ Schedule::command('outbox:relay')
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('deposits:reconcile')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();

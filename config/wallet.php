@@ -20,6 +20,11 @@ return [
         'default' => env('WALLET_GATEWAY', 'simulated'),
     ],
 
+    'deposit' => [
+        'reconcile_after_minutes' => (int) env('WALLET_DEPOSIT_RECONCILE_AFTER_MINUTES', 15),
+        'reconcile_batch_size' => (int) env('WALLET_DEPOSIT_RECONCILE_BATCH_SIZE', 100),
+    ],
+
     'idempotency' => [
         'ttl_minutes' => (int) env('WALLET_IDEMPOTENCY_TTL_MINUTES', 1440),
     ],

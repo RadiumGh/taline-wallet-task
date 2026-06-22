@@ -17,4 +17,9 @@ final class SimulatedPaymentGateway implements PaymentGateway
 
         return hash_equals($expected, $signature);
     }
+
+    public function fetchStatus(string $reference, ?string $gatewayReference): GatewayDepositStatus
+    {
+        return new GatewayDepositStatus(GatewayOutcome::Pending, '', '', '', $gatewayReference, []);
+    }
 }
