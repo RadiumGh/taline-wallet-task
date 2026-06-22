@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Domain\Idempotency\Exceptions\IdempotencyConflictException;
 use App\Domain\Idempotency\Exceptions\MissingIdempotencyKeyException;
 use App\Domain\Idempotency\IdempotencyStatus;
+use App\Domain\Observability\MetricsRecorder;
 use App\Models\IdempotencyKey;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -18,6 +19,8 @@ class EnforceIdempotency
     public const HEADER = 'Idempotency-Key';
 
     private const CLAIM_ATTRIBUTE = 'idempotency_claim_id';
+
+    public function __construct(private readonly MetricsRecorder $metrics) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -96,16 +99,21 @@ class EnforceIdempotency
     private function replayOrReject(?IdempotencyKey $row, string $requestHash): Response
     {
         if ($row === null) {
+            $this->metrics->increment('idempotency.conflict');
             throw IdempotencyConflictException::inFlight();
         }
 
         if (! hash_equals($row->request_hash, $requestHash)) {
+            $this->metrics->increment('idempotency.conflict');
             throw IdempotencyConflictException::keyReused();
         }
 
         if ($row->status === IdempotencyStatus::Processing) {
+            $this->metrics->increment('idempotency.conflict');
             throw IdempotencyConflictException::inFlight();
         }
+
+        $this->metrics->increment('idempotency.replay');
 
         return response()->json($row->response_body, $row->response_status ?? Response::HTTP_OK);
     }

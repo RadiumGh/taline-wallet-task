@@ -7,6 +7,7 @@ namespace App\Domain\Deposit;
 use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
 use App\Domain\Money\Money;
+use App\Domain\Observability\OperationRecorder;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Models\Deposit;
 use App\Models\User;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 final class DepositService
 {
+    public function __construct(private readonly OperationRecorder $recorder) {}
+
     public function create(User $user, int $walletId, int $amount, string $currency, ?string $gateway, string $idempotencyKey): Deposit
     {
         $wallet = $this->resolveOwnedWallet($user, $walletId);
@@ -33,7 +36,7 @@ final class DepositService
         $money = Money::of($amount, $currency);
 
         try {
-            return Deposit::create([
+            $deposit = Deposit::create([
                 'reference' => (string) Str::uuid(),
                 'wallet_id' => $wallet->getKey(),
                 'amount' => $money,
@@ -45,6 +48,10 @@ final class DepositService
         } catch (UniqueConstraintViolationException $e) {
             return $this->findByKey($wallet, $idempotencyKey) ?? throw $e;
         }
+
+        $this->recorder->depositCreated($deposit, $user);
+
+        return $deposit;
     }
 
     private function resolveOwnedWallet(User $user, int $walletId): Wallet

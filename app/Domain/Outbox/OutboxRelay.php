@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Domain\Outbox;
 
+use App\Domain\Observability\MetricsRecorder;
 use App\Models\OutboxEvent;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 final class OutboxRelay
 {
-    public function __construct(private readonly OutboxPublisher $publisher)
-    {
-    }
+    public function __construct(
+        private readonly OutboxPublisher $publisher,
+        private readonly MetricsRecorder $metrics,
+    ) {}
 
     public function relay(int $limit): int
     {
+        $this->recordLag();
+
         $published = 0;
 
         foreach ($this->claimable($limit) as $event) {
@@ -24,6 +29,17 @@ final class OutboxRelay
         }
 
         return $published;
+    }
+
+    private function recordLag(): void
+    {
+        $oldest = OutboxEvent::query()
+            ->where('status', OutboxStatus::Pending->value)
+            ->min('available_at');
+
+        $lag = $oldest === null ? 0 : now()->getTimestamp() - Carbon::parse($oldest)->getTimestamp();
+
+        $this->metrics->gauge('outbox.pending_lag_seconds', (float) max(0, $lag));
     }
 
     /**

@@ -43,7 +43,7 @@ final class LedgerService
         return DB::transaction(function () use ($reference, $legs): string {
             $wallets = $this->lockWallets($legs);
             $transactionGroup = (string) Str::uuid();
-            $balances = $wallets->map(fn(Wallet $wallet): int => $wallet->balance->amount)->all();
+            $balances = $wallets->map(fn (Wallet $wallet): int => $wallet->balance->amount)->all();
 
             foreach ($legs as $leg) {
                 $wallet = $wallets->get($leg->wallet->getKey());
@@ -84,7 +84,7 @@ final class LedgerService
     private function lockWallets(array $legs): Collection
     {
         $walletIds = collect($legs)
-            ->map(fn(LedgerLeg $leg): int => $leg->wallet->getKey())
+            ->map(fn (LedgerLeg $leg): int => $leg->wallet->getKey())
             ->unique()
             ->sort()
             ->values()
@@ -113,7 +113,7 @@ final class LedgerService
             $total = $total->plus($leg->amount);
         }
 
-        if (!$total->isZero()) {
+        if (! $total->isZero()) {
             throw UnbalancedLedgerPostException::notZero($total);
         }
     }

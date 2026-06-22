@@ -7,6 +7,7 @@ namespace App\Domain\Transfer;
 use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
 use App\Domain\Money\Money;
+use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Transfer\Exceptions\SelfTransferException;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
@@ -21,8 +22,8 @@ final class TransferService
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly OutboxRecorder $outbox,
-    ) {
-    }
+        private readonly OperationRecorder $recorder,
+    ) {}
 
     public function transfer(User $sender, int $toWalletId, int $amount, string $currency): Transfer
     {
@@ -35,7 +36,7 @@ final class TransferService
 
         $money = Money::of($amount, $currency);
 
-        return DB::transaction(function () use ($from, $to, $money): Transfer {
+        return DB::transaction(function () use ($sender, $from, $to, $money): Transfer {
             $transfer = Transfer::create([
                 'reference' => (string) Str::uuid(),
                 'from_wallet_id' => $from->getKey(),
@@ -56,6 +57,8 @@ final class TransferService
                 'amount' => $money->amount,
                 'currency' => $money->currency->code,
             ]);
+
+            $this->recorder->transferCompleted($transfer, $sender);
 
             return $transfer;
         }, attempts: 3);

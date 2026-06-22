@@ -9,6 +9,7 @@ use App\Domain\Gateway\Exceptions\InvalidGatewaySignatureException;
 use App\Domain\Gateway\PaymentGateway;
 use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
+use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Wallet\SystemAccountResolver;
 use App\Models\Deposit;
@@ -24,8 +25,8 @@ final class DepositCallbackService
         private readonly LedgerService $ledger,
         private readonly SystemAccountResolver $systemAccounts,
         private readonly OutboxRecorder $outbox,
-    ) {
-    }
+        private readonly OperationRecorder $recorder,
+    ) {}
 
     public function confirm(Deposit $deposit, GatewayCallbackData $data): CallbackOutcome
     {
@@ -48,6 +49,8 @@ final class DepositCallbackService
                 'amount' => $locked->amount->amount,
                 'currency' => $locked->amount->currency->code,
             ]);
+
+            $this->recorder->depositConfirmed($locked);
         });
     }
 
@@ -62,12 +65,14 @@ final class DepositCallbackService
                 'amount' => $locked->amount->amount,
                 'currency' => $locked->amount->currency->code,
             ]);
+
+            $this->recorder->depositFailed($locked);
         });
     }
 
     private function handle(Deposit $deposit, DepositStatus $target, GatewayCallbackType $type, GatewayCallbackData $data, Closure $applyEffect): CallbackOutcome
     {
-        if (!$this->gateway->verifySignature($data->rawPayload, $data->signature)) {
+        if (! $this->gateway->verifySignature($data->rawPayload, $data->signature)) {
             throw InvalidGatewaySignatureException::make();
         }
 
@@ -88,7 +93,7 @@ final class DepositCallbackService
                 return CallbackOutcome::AlreadyProcessed;
             }
 
-            if (!$locked->status->canTransitionTo($target)) {
+            if (! $locked->status->canTransitionTo($target)) {
                 throw InvalidDepositTransitionException::from($locked->status, $target);
             }
 
