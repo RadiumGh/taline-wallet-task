@@ -8,8 +8,8 @@ use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
 use App\Domain\Money\Money;
+use App\Models\Deposit;
 use App\Models\LedgerEntry;
-use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Support\Str;
 
@@ -18,13 +18,15 @@ function ledgeredWallet(int $balance, string $currency = 'IRR'): Wallet
     $wallet = Wallet::factory()->create(['currency' => $currency]);
 
     if ($balance !== 0) {
+        $deposit = Deposit::factory()->forWallet($wallet, $balance)->create();
+
         LedgerEntry::create([
             'transaction_group' => (string) Str::uuid(),
             'wallet_id' => $wallet->getKey(),
             'amount' => Money::of($balance, $currency),
             'balance_after' => Money::of($balance, $currency),
-            'reference_type' => $wallet->getMorphClass(),
-            'reference_id' => $wallet->getKey(),
+            'reference_type' => $deposit->getMorphClass(),
+            'reference_id' => $deposit->getKey(),
         ]);
 
         $wallet->balance = Money::of($balance, $currency);
@@ -36,7 +38,7 @@ function ledgeredWallet(int $balance, string $currency = 'IRR'): Wallet
 
 function post(array $legs, ?object $reference = null): string
 {
-    return app(LedgerService::class)->post($reference ?? User::factory()->create(), $legs);
+    return app(LedgerService::class)->post($reference ?? Deposit::factory()->create(), $legs);
 }
 
 test('a balanced movement updates both balances and writes entries with running balance_after', function () {

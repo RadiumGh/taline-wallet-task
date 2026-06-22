@@ -31,7 +31,8 @@ final class WalletTransactionQuery
         }
 
         if (isset($filters['reference_type'])) {
-            $query->where('reference_type', self::REFERENCE_TYPES[$filters['reference_type']]);
+            $model = self::REFERENCE_TYPES[$filters['reference_type']];
+            $query->where('reference_type', (new $model)->getMorphClass());
         }
 
         if (isset($filters['date_from'])) {

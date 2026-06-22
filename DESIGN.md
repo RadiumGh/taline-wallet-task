@@ -45,7 +45,9 @@ the same operation (move signed amounts between two `wallets` rows).
 Immutable (no `updated_at`; the model blocks `updating`/`deleting`). Each row:
 `transaction_group` (UUID linking the balanced legs), `wallet_id`, signed `amount`, `balance_after`
 (running balance captured under the row lock), and a **morph reference** (`reference_type` +
-`reference_id` → `Deposit`/`Transfer`) as the brief requires.
+`reference_id` → `Deposit`/`Transfer`) as the brief requires. Morph types are stored as stable
+aliases via `Relation::enforceMorphMap` (e.g. `deposit`, not `App\Models\Deposit`), so renaming or
+moving a class can never corrupt the polymorphic column.
 
 Two indexes carry their weight:
 - Composite `(wallet_id, created_at, id)` — serves the history query and its date-range filters from
