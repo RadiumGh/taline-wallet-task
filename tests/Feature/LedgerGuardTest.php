@@ -32,7 +32,7 @@ test('re-posting the same source operation is rejected and credits the wallet on
     $transfer = transferReference($from, $to);
     $ledger = app(LedgerService::class);
 
-    $legs = fn(): array => [
+    $legs = fn (): array => [
         LedgerLeg::debit($from, Money::of(100, 'IRR')),
         LedgerLeg::credit($to, Money::of(100, 'IRR')),
     ];
@@ -43,7 +43,7 @@ test('re-posting the same source operation is rejected and credits the wallet on
         ->and($to->refresh()->balance->amount)->toBe(100)
         ->and(LedgerEntry::query()->count())->toBe(2);
 
-    expect(fn() => $ledger->post($transfer, $legs()))
+    expect(fn () => $ledger->post($transfer, $legs()))
         ->toThrow(LedgerAlreadyPostedException::class);
 
     expect($from->refresh()->balance->amount)->toBe(900)
@@ -55,7 +55,7 @@ test('duplicate entries for the same reference and wallet violate the unique key
     $wallet = Wallet::factory()->create(['currency' => 'IRR']);
     $transfer = transferReference($wallet, Wallet::factory()->create(['currency' => 'IRR']));
 
-    $entry = fn(): LedgerEntry => LedgerEntry::create([
+    $entry = fn (): LedgerEntry => LedgerEntry::create([
         'transaction_group' => (string) Str::uuid(),
         'wallet_id' => $wallet->getKey(),
         'amount' => Money::of(100, 'IRR'),

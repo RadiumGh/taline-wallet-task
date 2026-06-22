@@ -6,6 +6,7 @@ use App\Http\Controllers\DepositCallbackController;
 use App\Http\Controllers\DepositController;
 use App\Http\Controllers\PingController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\WalletTransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.header')->group(function (): void {
@@ -17,6 +18,9 @@ Route::middleware('auth.header')->group(function (): void {
     Route::post('/deposits', [DepositController::class, 'store'])
         ->middleware('idempotency')
         ->name('deposits.store');
+
+    Route::get('/wallets/{wallet}/transactions', [WalletTransactionController::class, 'index'])
+        ->name('wallets.transactions.index');
 });
 
 Route::post('/deposits/{deposit}/callbacks/confirm', [DepositCallbackController::class, 'confirm'])
