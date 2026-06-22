@@ -1,220 +1,190 @@
-# DESIGN — Taline Wallet & Ledger
+# Design notes — Taline Wallet & Ledger
 
-This document explains **what was built and why**. The hard part of this task is not the three
-endpoints — it is keeping real money correct under **retries, concurrency, and non-exactly-once
-gateway callbacks**. The spine of the solution is therefore:
+The three endpoints — deposit, transfer, history — aren't the hard part. What makes this a money
+system is everything that has to stay true when the network is flaky, callers retry, several servers
+hit the same wallet at once, and the gateway calls back more than once. So I built it around a few
+properties and let the endpoints fall out of them: a double-entry ledger as the source of truth, row
+locking for concurrency, idempotency at every layer I could reach, explicit state machines for anything
+with a lifecycle, and a transactional outbox plus real observability for side effects.
 
-> double-entry ledger (truth) · row locking (concurrency) · idempotency at every layer (duplicates)
-> · state machines (legal transitions) · transactional outbox + observability (reliable side
-> effects, audit/trace/metrics).
+## What's here
 
-The three endpoints are the surface; those properties are the substance.
+- **Deposit** — `POST /api/deposits` opens a `pending` deposit; no money moves until the gateway calls
+  back `confirm` or `fail`. A confirm credits the wallet and debits `gateway_clearing`, once, however
+  many times the callback arrives.
+- **Transfer** — `POST /api/transfers`, synchronous and atomic: debit sender, credit receiver, in one
+  locked transaction.
+- **History** — `GET /api/wallets/{wallet}/transactions`, cursor-paginated with filters.
+- Underneath the three: a single money writer, the layered idempotency and outbox detailed below, a
+  reconciliation job for stuck deposits, and a concurrency suite on real MySQL.
 
-## What is implemented
+## Data model
 
-- **Deposit** — `POST /api/deposits` creates a `pending` deposit (no money moves yet); the gateway
-  later calls back `confirm` or `fail`. Confirm credits the wallet and debits a `gateway_clearing`
-  system account, exactly once.
-- **Transfer** — `POST /api/transfers`, synchronous and atomic, debits sender / credits receiver in
-  one locked transaction.
-- **Transaction history** — `GET /api/wallets/{wallet}/transactions`, cursor-paginated with filters.
-- **Cross-cutting** — single ledger writer, layered idempotency, a real transactional outbox with a
-  scheduled relay and idempotent consumers, audit/metrics/structured logs, a deposit reconciliation
-  job, and a concurrency test suite on real MySQL.
+### Wallets and system accounts share one table
 
----
+Double-entry took the most thought. Every movement is a balanced set of signed entries summing to zero,
+so a deposit can't just be "+5000 in a wallet" — it has to come from somewhere. I gave the gateway a
+clearing account: a deposit is "credit the user, debit `gateway_clearing`", a transfer is "debit one
+wallet, credit another." Since both are the same shape — move signed amounts between two accounts — user
+wallets and system accounts share one `wallets` table, told apart by `type` (system accounts carry a
+stable `code` and a null `user_id`). `balance` is a signed BIGINT in minor units, but a materialized
+convenience I can rebuild from the ledger; a CHECK (`type <> 'user' OR balance >= 0`) keeps user wallets
+non-negative while letting a clearing account go negative, as double-entry wants. A `version` bumps on
+every write, for an optimistic-lock option and a cheap audit signal.
 
-## Data model and why
+### The ledger is append-only, and it is the truth
 
-### One unified `wallets` (ledger-account) table
+`ledger_entries` is immutable — no `updated_at`, and the model refuses `update`/`delete`. Each entry
+records the `transaction_group` tying a movement's legs together, the wallet, a signed `amount`, the
+`balance_after` captured under the lock, and a polymorphic reference to what caused it (a `Deposit` or
+`Transfer`). Morph types are stored as short aliases — `deposit`, not `App\Models\Deposit` — via
+`Relation::enforceMorphMap`, so renaming a class can't corrupt a column full of class names.
 
-True double-entry means every movement is a balanced set of signed entries that sum to zero, and a
-deposit is not money from nowhere — it moves *from a gateway clearing account into the user's
-wallet*. Both sides need an account, so **user wallets and system counterparties live in one
-table** (`type = user | system`, `code` for system accounts like `gateway_clearing`,
-`user_id` null for system). This keeps the double-entry shape uniform: a deposit and a transfer are
-the same operation (move signed amounts between two `wallets` rows).
+Two indexes earn their keep: a composite `(wallet_id, created_at, id)` serves the history query and its
+date filters from one index, and a unique `(reference_type, reference_id, wallet_id)` is the last line
+of defence against double-posting — at most one entry per operation per wallet, so a duplicate confirm
+physically can't credit twice.
 
-- `balance` is a **materialized** BIGINT (minor units), an optimization — the ledger is the truth.
-- A **CHECK** constraint `type <> 'user' OR balance >= 0` lets system/clearing accounts go negative
-  by design while a user wallet can *never* go negative, enforced at the DB (not just in code).
-- `version` is bumped on every write (audit / optimistic-lock option).
+### The rest of the tables
 
-### `ledger_entries` — append-only source of truth
+- `deposits` — `pending → confirmed | failed` state machine, gateway fields, unique
+  `(wallet_id, idempotency_key)` on creation, `(status, created_at)` index for the reconciliation sweep.
+- `transfers` — the two wallet ids, status, UUID `reference`, unique `(from_wallet_id, idempotency_key)`.
+- `idempotency_keys` — the HTTP layer, Stripe-style: unique `(scope, key)` plus the stored response.
+- `gateway_callbacks` — unique `(gateway, event_id)`, so a gateway event is handled exactly once.
+- `outbox_events` — durable side-effect log; unique `dedupe_key`, indexed `(status, available_at, id)`.
+- `audit_logs` — append-only record of non-money events (transitions, callback receipts) with request id.
 
-Immutable (no `updated_at`; the model blocks `updating`/`deleting`). Each row:
-`transaction_group` (UUID linking the balanced legs), `wallet_id`, signed `amount`, `balance_after`
-(running balance captured under the row lock), and a **morph reference** (`reference_type` +
-`reference_id` → `Deposit`/`Transfer`) as the brief requires. Morph types are stored as stable
-aliases via `Relation::enforceMorphMap` (e.g. `deposit`, not `App\Models\Deposit`), so renaming or
-moving a class can never corrupt the polymorphic column.
+## Decisions I'd stand behind
 
-Two indexes carry their weight:
-- Composite `(wallet_id, created_at, id)` — serves the history query and its date-range filters from
-  one index (equality → range → tiebreaker), instead of several narrow indexes.
-- Unique **`(reference_type, reference_id, wallet_id)`** — the strongest anti-double-post door: a
-  given source operation can post at most one entry per wallet. Even if every other guard were
-  bypassed, a duplicate confirm physically cannot double-credit.
+### Money is integer minor units, never a float
 
-### Operation & control tables
+Amounts are signed BIGINT in minor units; in code they're an immutable `Money` value object owning the
+arithmetic, currency checks, and positivity. Scales live in `config/wallet.php` (IRR 0, USD 2, BTC 8),
+so a new currency needs no schema change. Floats lose precision; `DECIMAL` bakes one scale into a column.
+The trade-off is BIGINT's ~9.2×10¹⁸ ceiling — far past any balance here. Nothing but integers and a
+currency code crosses the boundary.
 
-- `deposits` — `status` state machine (`pending → confirmed | failed`), `gateway`/`gateway_reference`,
-  unique `(wallet_id, idempotency_key)` for creation, `(status, created_at)` index for reconciliation.
-- `transfers` — `from/to_wallet_id`, `status` (`completed`), `reference` UUID.
-- `idempotency_keys` — HTTP-layer (Stripe-style): `(scope, key)` unique, stored response for replay.
-- `gateway_callbacks` — `(gateway, event_id)` unique: a given gateway event is processed once.
-- `outbox_events` — durable side-effect log with `dedupe_key` unique and a `(status, available_at, id)`
-  relay-claim index.
-- `audit_logs` — append-only non-money events (status transitions, callback receipts) with
-  `request_id`, actor/subject morphs, and JSON context.
+### Signed amounts and a transaction_group, not debit/credit columns
 
----
+Against a debit/credit-column layout or a journal-parent-plus-lines table (both fine), signed amounts
+plus a `transaction_group` UUID make the invariants trivial: a wallet's balance is `SUM(amount)`, and a
+movement balances when its legs `SUM()` to zero. `balance_after` on each entry lets support replay a
+wallet line by line and spot drift from the materialized balance.
 
-## Key decisions and trade-offs
+### One writer for all money: `LedgerService::post()`
 
-### Money: BIGINT minor units + a `Money` value object (not floats, not DECIMAL)
+Exactly one piece of code writes `ledger_entries` or touches `wallets.balance`; every flow goes through
+it. It runs in `DB::transaction(attempts: 3)` so deadlocks retry, locks the wallets with
+`lockForUpdate()` in ascending id order (consistent ordering is what prevents deadlocks), re-reads
+balances *after* locking, writes the legs, updates each balance and `version`, and records the outbox
+row — all in one transaction, never calling anything external while holding locks. The isolation level
+barely matters here: REPEATABLE READ alone won't stop two transactions both reading a balance and both
+spending it. Safety is the explicit primary-key locks (so InnoDB takes precise row locks), the unique
+constraints, and idempotency.
 
-All amounts are signed BIGINT in the currency's minor units; in code they are an immutable `Money`
-`(int amount, Currency currency)` with arithmetic, currency-match enforcement, and positivity in one
-place. Currencies and their `scale` are config-driven (`config/wallet.php`: IRR scale 0, USD 2,
-BTC 8) so multi-currency needs no schema change.
+### Idempotency in layers, because everything retries
 
-- **vs floats** — floats lose precision; forbidden for money.
-- **vs `DECIMAL(x,y)`** — integer minor units are exact, fast, index/compare-friendly, and don't
-  bake one scale into a column. Trade-off: BIGINT's signed ceiling (~9.2×10¹⁸) is far beyond any
-  realistic balance; a currency needing arbitrary precision would revisit with `DECIMAL`.
-- The API only ever exchanges integer minor units + a currency code — no float crosses the boundary.
+I assume every request and callback can arrive more than once, and guard each layer:
 
-### Signed `amount` + `transaction_group` (not debit/credit columns or a journal-parent table)
+1. HTTP middleware on the two POSTs requires an `Idempotency-Key` scoped per user: the first request
+   wins the `(scope, key)` race, a same-key/same-payload retry replays the stored response, a same-key/
+   different-payload one is `409`, and a 5xx releases the key so a real retry isn't wedged.
+2. Unique DB constraints — deposits `(wallet_id, idempotency_key)`, transfers
+   `(from_wallet_id, idempotency_key)`, callbacks `(gateway, event_id)`, the ledger post guard, the
+   outbox `dedupe_key`.
+3. State machines that permit only legal transitions, so a duplicate terminal callback is a no-op.
+4. The ledger's unique `(reference, wallet)` guard under all of it.
 
-With signed amounts, `balance = SUM(amount)` per wallet is trivially correct and the per-movement
-zero-sum invariant is a single `SUM() = 0` check. A debit/credit-column layout or a separate
-`ledger_transactions` parent + lines table are both valid; signed minor units + a `transaction_group`
-UUID were chosen for the simplest reconciliation story. `balance_after` is stored so finance/support
-can replay any wallet line-by-line and detect drift between the materialized balance and the ledger.
+At-least-once delivery plus idempotent processing gives effectively-once movement — the most you can
+honestly promise.
 
-### One money writer: `LedgerService::post()`
+### Gateway callbacks: authenticated, de-duplicated, state-guarded
 
-The only code that writes `ledger_entries` or mutates `wallets.balance`. Every flow (deposit confirm,
-transfer) goes through it. It runs in `DB::transaction(attempts: 3)` (deadlock retry), locks the
-involved wallets with `lockForUpdate()` **in ascending id order** (global lock ordering prevents
-deadlocks), re-checks balances **after** locking, appends balanced legs, computes `balance_after`,
-updates balances/`version`, and writes the outbox row — all atomically. **No external/HTTP/gateway
-calls happen inside the transaction.**
+They move money, so they authenticate the caller with an HMAC-SHA256 signature over the raw body. Each
+event is recorded once via `(gateway, event_id)`, the deposit row is locked, and the
+`pending → confirmed | failed` transition is enforced. A second confirm returns `already_processed`; a
+confirm after a fail is rejected.
 
-### Locks + constraints over isolation level
+### "Timeout means unknown" for stuck deposits
 
-MySQL's default REPEATABLE READ does not by itself make financial writes safe. Correctness comes from
-explicit `lockForUpdate()` (locking reads by PK, so InnoDB takes precise row locks), unique
-constraints, and idempotency — not from raising the isolation level.
+A deposit with no callback stays `pending`; I never auto-fail it, since a missing callback says nothing
+about what happened gateway-side. A scheduled `deposits:reconcile` job
+(`withoutOverlapping()->onOneServer()`) takes deposits pending past a threshold, asks the gateway, and
+drives the transition through the same confirm/fail path — producing the same ledger entry, outbox
+event, and audit a webhook would. Safe to repeat: the pending filter, a deterministic dedup id, and the
+ledger guard each stop double resolution. The simulated gateway returns `Pending` today — the machinery
+is real and tested; live polling is where a production gateway slots in.
 
-### Idempotency in layers (assume every request/callback arrives more than once)
+### A transactional outbox rather than `afterCommit()`
 
-1. **HTTP middleware** on `POST` deposit/transfer — requires `Idempotency-Key`, scoped per user;
-   first request wins the `(scope, key)` race, the stored response is replayed for same key + same
-   payload, a different payload under the same key is `409`. Transient 5xx releases the key so a
-   genuine retry can proceed.
-2. **DB unique constraints** — `deposits (wallet_id, idempotency_key)`,
-   `transfers (from_wallet_id, idempotency_key)`, `gateway_callbacks (gateway, event_id)`,
-   `ledger_entries (reference, wallet)`, `outbox_events (dedupe_key)`.
-3. **State machines** — `canTransitionTo()` guards; duplicate terminal callbacks are no-ops.
-4. **Ledger identity** — the unique `(reference, wallet)` post guard is the final backstop.
+Side effects mustn't be lost if the process dies after commit, nor fire if it rolls back. `afterCommit()`
+misses the first case — die between commit and dispatch and the message is gone. So an `outbox_events`
+row commits in the same transaction as the money change, and a scheduled `outbox:relay` publishes
+pending rows afterwards with backoff and jitter. The relay can publish twice (crash after publishing,
+before marking published), so consumers are idempotent — the honest "exactly once."
 
-At-least-once delivery + idempotent processing = **effectively-once** money movement.
+### Cursor pagination for history
 
-### Gateway callbacks: authenticated + de-duplicated + state-guarded
+Keyset pagination via `cursorPaginate()`, ordered by `(created_at desc, id desc)` and backed by the
+`(wallet_id, created_at, id)` index, so it doesn't degrade like offset pagination on a large table. The
+client passes the encoded cursor back; a tampered one is rejected. Filters compose with it.
 
-Callback endpoints move money, so they authenticate the caller via an **HMAC-SHA256 signature** over
-the raw body (shared secret in config). Each event is recorded once via `gateway_callbacks
-(gateway, event_id)`; the deposit row is locked and the `pending → confirmed|failed` transition is
-enforced. A second confirm returns `already_processed`; a confirm after fail is rejected.
+### Authorization and rate limiting
 
-### Reconciliation: "timeout = unknown"
-
-A deposit with no callback stays `pending` forever rather than being auto-failed. The
-`deposits:reconcile` job (scheduled `withoutOverlapping()->onOneServer()`) selects deposits stuck
-past a threshold, asks the gateway `fetchStatus()`, and drives the legal transition idempotently —
-reusing the same confirm/fail path (so a reconciled confirm posts the same ledger/outbox/audit as a
-webhook). It is safe to run repeatedly: the pending filter, the deterministic dedup event id, and the
-ledger guard each independently prevent double-resolution.
-
-### Transactional outbox over `afterCommit()`
-
-Side effects (notifications, metric pushes) must not be lost if the process dies between commit and
-dispatch, nor fire if the transaction rolls back. So the business write and an `outbox_events` row
-commit **atomically**; a scheduled `outbox:relay` then publishes pending rows with exponential
-backoff + jitter on failure. The relay can publish twice (crash after publish, before marking
-`published`), so consumers are **idempotent** — the honest effectively-once model. Plain
-`afterCommit()` would still lose the message on a crash; the durable outbox row does not.
-
-### Cursor pagination
-
-History uses Laravel `cursorPaginate()` ordered by `(created_at desc, id desc)`, backed by the
-`(wallet_id, created_at, id)` index — keyset pagination that doesn't degrade at scale. The response
-carries an encoded cursor the client passes back; invalid cursors are rejected. Filters (`direction`,
-`reference_type`, `date_from`/`date_to`) compose with the cursor.
+Authentication is faked (`X-User-Id`), but authorization is real where it counts: a wallet's history
+goes through a `WalletPolicy`, and I answer a wallet you don't own with `404`, not `403`, so the
+response doesn't confirm it exists. Deposit and transfer need no separate policy — each resolves the
+caller's own wallet in its service. Writes and the history read are rate limited per caller, callbacks
+per IP, limits in config; I key the limiters off the user header, not the resolved user, so they don't
+depend on middleware ordering and the throttle can sit in front of the auth shim.
 
 ### Observability
 
-- **Trace** — request-id middleware assigns/propagates `X-Request-Id` into logs, `audit_logs`, and
-  outbox payloads.
-- **Audit** — immutable `ledger_entries` (money) + append-only `audit_logs` (transitions) = full
-  "what happened and why," routed through one `OperationRecorder` so the three signals can't drift.
-- **Metrics** — a `MetricsRecorder` interface (`increment`/`gauge`/`histogram`); a log driver here,
-  Prometheus/StatsD in production. Business counters/volumes + technical signals (idempotency
-  replays/conflicts, outbox lag) are emitted.
-- **Logs** — structured, with request id and no secrets/PII (the gateway signature/secret never
-  enters a log context).
+A request-id middleware stamps `X-Request-Id` onto logs, audit rows, and outbox payloads. The immutable
+ledger is the money audit; `audit_logs` covers the rest (transitions, callback receipts), both through
+one `OperationRecorder` so the signals can't drift. Metrics sit behind a `MetricsRecorder` interface (a
+log driver here, Prometheus/StatsD in production) covering business and technical numbers like
+idempotency replays and outbox lag. Logs are structured and never carry the gateway secret or signature.
 
----
+## Left out, on purpose
 
-## Deliberately left out (and why)
+- **Real authentication** — out of scope; the caller is the `X-User-Id` header plus an ownership check.
+- **Withdrawals** — I designed the flow (request → approve → settle) but didn't build it; I'd rather
+  ship the core solid than half a fourth feature.
+- **Multi-currency FX** — wallets are per-currency and the schema is ready for more, but there's no
+  conversion; a cross-currency transfer is rejected, not converted.
+- **Dividing money** — `Money` only adds, subtracts, negates. The first proportional feature (fees,
+  interest, splits) should add an explicit allocation method with a defined rounding rule rather than
+  scattering `intdiv` and breaking the zero-sum invariant.
+- **A real reconciliation gateway** — the mechanism is built and tested; the live polling isn't.
+- **Cleaner public ids** — resources still expose raw auto-increment ids beside the UUID `reference`;
+  I'd rather expose only references and take them on input so primary keys never leak.
+- **DB-level ledger immutability** — enforced in the model today; in production I'd add a trigger,
+  restricted grants, or an append-only role.
 
-- **Real authentication** — out of scope per the brief; simulated with an `X-User-Id` auth-shim
-  middleware and per-wallet ownership checks.
-- **Withdrawal flow** (`request → approve → settle`) — designed in the plan, built last and only if
-  core quality held; currently not implemented.
-- **Multi-currency FX** — wallets are per-currency and the schema is multi-currency-ready, but there
-  is no conversion/rate logic. Cross-currency transfers are rejected, not converted.
-- **Money division/allocation** — `Money` is closed under add/subtract/negate only; there is no
-  multiply/divide/allocate, so no rounding policy is exercised. The first proportional feature (fees,
-  interest, splits) must add an explicit largest-remainder allocation API.
-- **Deep gateway reconciliation** — the *mechanism* (query stuck deposits → ask gateway → drive
-  transition) is built and tested, but the production `SimulatedPaymentGateway::fetchStatus()` returns
-  `Pending` (it has no real status endpoint); a real implementation would poll the provider's API.
-- **Public-id hygiene** — API resources currently expose raw sequential ids alongside the UUID
-  `reference`. A polished contract would expose only references and accept wallet references on input
-  (TD-003).
-- **DB-level ledger immutability** — enforced in the Eloquent model today; production would add a DB
-  trigger / restricted grants / append-only role.
+## If traffic grew
 
-The running list with risk and suggested fixes is in `ai-docs/todos/tech-debts.md`.
+- **History reads** go to read replicas; the keyset index keeps them cheap.
+- **Ledger growth** — partition and archive `ledger_entries` by time; the append-only design makes that
+  safe.
+- **Idempotency, rate limits, hot balances** move to Redis (the idempotency table becomes a lock with a
+  TTL; hot balances get cached and invalidated on post).
+- **The outbox relay** is the one piece leaning on a single instance. To run several I'd claim batches
+  with `SELECT … FOR UPDATE SKIP LOCKED` and a short `publishing` lease, plus a sweep to reclaim rows
+  from a relay that died mid-publish.
+- **Queues** split by workload so a slow consumer can't starve money-critical work.
+- **Hot wallets** get sharded into sub-accounts summing to the logical balance, or batched posts; the
+  `version` column already leaves room for an optimistic path.
 
----
+## What another week buys
 
-## How it copes with far more traffic
-
-- **History reads** — route to **read replicas**; the keyset `(wallet_id, created_at, id)` index
-  already avoids offset-scan degradation.
-- **Ledger growth** — **partition/archive** `ledger_entries` by time; keep hot recent data, move cold
-  data to cheaper storage; the immutable design makes archival safe.
-- **Idempotency / rate-limits / hot-balance cache** — move to **Redis** (the `idempotency_keys` table
-  becomes a Redis lock with TTL; hot wallet balances can be cached and invalidated on post).
-- **Outbox relay** — today correctness rests on a single relay (`withoutOverlapping()->onOneServer()`).
-  To scale horizontally, claim batches with `SELECT … FOR UPDATE SKIP LOCKED` + a `publishing` lease
-  state and a stuck-row reclaim sweep (TD-007), then run many relay workers.
-- **Queue isolation** — separate queues/workers per workload (callbacks vs notifications vs metrics)
-  so a slow consumer can't starve money-critical work.
-- **Wallet hot-row contention** — for a few extremely hot accounts, shard into sub-accounts that sum
-  to the logical balance, or batch posts; the `version` column already supports an optimistic path.
-
-## What another week would add
-
-1. **Withdrawal flow** with fund reservation and an admin approve/settle state machine.
-2. **Tighten API resources** to references-only (drop the raw sequential ids — TD-003).
-3. **Real gateway polling** in reconciliation, plus alerting on illegal transitions (fail-after-confirm).
-4. **Exactly-once metrics/logs** by emitting them from outbox consumers (after commit) instead of
-   inside the money transaction, removing the deadlock-retry over-count (TD-008).
-5. **DB-enforced ledger immutability** and a deadlock fault-injection test that proves the
-   `attempts: 3` retry path recovers.
-6. **`Money` allocation API** with a documented rounding mode so proportional math stays zero-sum.
+1. The withdrawal flow, with fund reservation and an admin approve/settle state machine.
+2. References-only API resources, so primary keys stop leaking.
+3. Real gateway polling in reconciliation, plus an alert on illegal transitions (a fail after a confirm
+   is a page-someone event).
+4. Metrics and logs emitted from outbox consumers so they fire exactly once, instead of inside the money
+   transaction where a deadlock retry can double-count them.
+5. DB-enforced ledger immutability, and a fault-injection test that forces a real deadlock to prove the
+   retry recovers.
+6. A `Money` allocation API with a documented rounding mode.

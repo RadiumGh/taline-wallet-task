@@ -12,19 +12,22 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth.header')->group(function (): void {
     Route::get('/ping', PingController::class)->name('ping');
     Route::post('/transfers', [TransferController::class, 'store'])
-        ->middleware('idempotency')
+        ->middleware(['throttle:wallet-writes', 'idempotency'])
         ->name('transfers.store');
 
     Route::post('/deposits', [DepositController::class, 'store'])
-        ->middleware('idempotency')
+        ->middleware(['throttle:wallet-writes', 'idempotency'])
         ->name('deposits.store');
 
     Route::get('/wallets/{wallet}/transactions', [WalletTransactionController::class, 'index'])
+        ->middleware('throttle:wallet-reads')
         ->name('wallets.transactions.index');
 });
 
-Route::post('/deposits/{deposit}/callbacks/confirm', [DepositCallbackController::class, 'confirm'])
-    ->name('deposits.callbacks.confirm');
+Route::middleware('throttle:gateway-callbacks')->group(function (): void {
+    Route::post('/deposits/{deposit}/callbacks/confirm', [DepositCallbackController::class, 'confirm'])
+        ->name('deposits.callbacks.confirm');
 
-Route::post('/deposits/{deposit}/callbacks/fail', [DepositCallbackController::class, 'fail'])
-    ->name('deposits.callbacks.fail');
+    Route::post('/deposits/{deposit}/callbacks/fail', [DepositCallbackController::class, 'fail'])
+        ->name('deposits.callbacks.fail');
+});

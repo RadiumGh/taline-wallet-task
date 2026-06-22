@@ -15,7 +15,7 @@ class WalletTransactionController extends Controller
 {
     public function index(IndexTransactionRequest $request, Wallet $wallet, WalletTransactionQuery $transactions): AnonymousResourceCollection
     {
-        if ($wallet->user_id !== $request->user()->getKey()) {
+        if ($request->user()->cannot('view', $wallet)) {
             throw WalletNotFoundException::forOwnedWallet($request->user()->getKey(), $wallet->getKey());
         }
 
