@@ -14,6 +14,11 @@ final class WalletNotFoundException extends RuntimeException implements HasHttpS
         return new self("No {$currency} wallet found for user [{$userId}].");
     }
 
+    public static function forOwnedWallet(int $userId, int $walletId): self
+    {
+        return new self("Wallet [{$walletId}] was not found for user [{$userId}].");
+    }
+
     public function httpStatus(): int
     {
         return 404;

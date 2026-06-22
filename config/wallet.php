@@ -17,6 +17,7 @@ return [
 
     'gateway' => [
         'secret' => env('WALLET_GATEWAY_SECRET', ''),
+        'default' => env('WALLET_GATEWAY', 'simulated'),
     ],
 
     'idempotency' => [
