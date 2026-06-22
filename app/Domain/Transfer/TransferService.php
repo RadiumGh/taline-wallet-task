@@ -7,6 +7,7 @@ namespace App\Domain\Transfer;
 use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
 use App\Domain\Money\Money;
+use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Transfer\Exceptions\SelfTransferException;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Models\Transfer;
@@ -17,7 +18,11 @@ use Illuminate\Support\Str;
 
 final class TransferService
 {
-    public function __construct(private readonly LedgerService $ledger) {}
+    public function __construct(
+        private readonly LedgerService $ledger,
+        private readonly OutboxRecorder $outbox,
+    ) {
+    }
 
     public function transfer(User $sender, int $toWalletId, int $amount, string $currency): Transfer
     {
@@ -42,6 +47,14 @@ final class TransferService
             $this->ledger->post($transfer, [
                 LedgerLeg::debit($from, $money),
                 LedgerLeg::credit($to, $money),
+            ]);
+
+            $this->outbox->record($transfer, 'transfer.completed', "transfer.completed:{$transfer->getKey()}", [
+                'reference' => $transfer->reference,
+                'from_wallet_id' => $transfer->from_wallet_id,
+                'to_wallet_id' => $transfer->to_wallet_id,
+                'amount' => $money->amount,
+                'currency' => $money->currency->code,
             ]);
 
             return $transfer;

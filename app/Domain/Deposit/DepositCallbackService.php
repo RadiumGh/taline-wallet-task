@@ -9,6 +9,7 @@ use App\Domain\Gateway\Exceptions\InvalidGatewaySignatureException;
 use App\Domain\Gateway\PaymentGateway;
 use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
+use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Wallet\SystemAccountResolver;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
@@ -22,7 +23,9 @@ final class DepositCallbackService
         private readonly PaymentGateway $gateway,
         private readonly LedgerService $ledger,
         private readonly SystemAccountResolver $systemAccounts,
-    ) {}
+        private readonly OutboxRecorder $outbox,
+    ) {
+    }
 
     public function confirm(Deposit $deposit, GatewayCallbackData $data): CallbackOutcome
     {
@@ -38,6 +41,13 @@ final class DepositCallbackService
             ]);
 
             $locked->confirmed_at = now();
+
+            $this->outbox->record($locked, 'deposit.confirmed', "deposit.confirmed:{$locked->getKey()}", [
+                'reference' => $locked->reference,
+                'wallet_id' => $locked->wallet_id,
+                'amount' => $locked->amount->amount,
+                'currency' => $locked->amount->currency->code,
+            ]);
         });
     }
 
@@ -45,12 +55,19 @@ final class DepositCallbackService
     {
         return $this->handle($deposit, DepositStatus::Failed, GatewayCallbackType::Fail, $data, function (Deposit $locked): void {
             $locked->failed_at = now();
+
+            $this->outbox->record($locked, 'deposit.failed', "deposit.failed:{$locked->getKey()}", [
+                'reference' => $locked->reference,
+                'wallet_id' => $locked->wallet_id,
+                'amount' => $locked->amount->amount,
+                'currency' => $locked->amount->currency->code,
+            ]);
         });
     }
 
     private function handle(Deposit $deposit, DepositStatus $target, GatewayCallbackType $type, GatewayCallbackData $data, Closure $applyEffect): CallbackOutcome
     {
-        if (! $this->gateway->verifySignature($data->rawPayload, $data->signature)) {
+        if (!$this->gateway->verifySignature($data->rawPayload, $data->signature)) {
             throw InvalidGatewaySignatureException::make();
         }
 
@@ -71,7 +88,7 @@ final class DepositCallbackService
                 return CallbackOutcome::AlreadyProcessed;
             }
 
-            if (! $locked->status->canTransitionTo($target)) {
+            if (!$locked->status->canTransitionTo($target)) {
                 throw InvalidDepositTransitionException::from($locked->status, $target);
             }
 
