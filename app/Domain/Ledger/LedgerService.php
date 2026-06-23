@@ -24,12 +24,12 @@ final class LedgerService
     /**
      * @param  list<LedgerLeg>  $legs
      */
-    public function post(Model $reference, array $legs): string
+    public function post(Model $reference, array $legs, string $postingKey = 'primary'): string
     {
         $this->assertBalanced($legs);
 
         try {
-            return $this->commit($reference, $legs);
+            return $this->commit($reference, $legs, $postingKey);
         } catch (UniqueConstraintViolationException) {
             throw LedgerAlreadyPostedException::forReference($reference);
         }
@@ -38,9 +38,9 @@ final class LedgerService
     /**
      * @param  list<LedgerLeg>  $legs
      */
-    private function commit(Model $reference, array $legs): string
+    private function commit(Model $reference, array $legs, string $postingKey): string
     {
-        return DB::transaction(function () use ($reference, $legs): string {
+        return DB::transaction(function () use ($reference, $legs, $postingKey): string {
             $wallets = $this->lockWallets($legs);
             $transactionGroup = (string) Str::uuid();
             $balances = $wallets->map(fn (Wallet $wallet): int => $wallet->balance->amount)->all();
@@ -62,6 +62,7 @@ final class LedgerService
                     'wallet_id' => $wallet->getKey(),
                     'amount' => $leg->amount,
                     'balance_after' => new Money($resultingBalance, $wallet->balance->currency),
+                    'posting_key' => $postingKey,
                 ]);
                 $entry->reference()->associate($reference);
                 $entry->save();

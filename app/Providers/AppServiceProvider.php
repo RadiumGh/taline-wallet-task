@@ -14,6 +14,7 @@ use App\Http\Middleware\AuthenticateWithUserHeader;
 use App\Models\Deposit;
 use App\Models\Transfer;
 use App\Models\User;
+use App\Models\Withdrawal;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -34,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'deposit' => Deposit::class,
             'transfer' => Transfer::class,
+            'withdrawal' => Withdrawal::class,
             'user' => User::class,
         ]);
 

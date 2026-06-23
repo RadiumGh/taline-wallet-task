@@ -13,6 +13,8 @@ return [
 
     'system_accounts' => [
         'gateway_clearing' => 'gateway_clearing',
+        'withdrawal_clearing' => 'withdrawal_clearing',
+        'withdrawal_payout' => 'withdrawal_payout',
     ],
 
     'gateway' => [

@@ -22,7 +22,7 @@ with a lifecycle, and a transactional outbox plus real observability for side ef
 
 ### Wallets and system accounts share one table
 
-Double-entry took the most thought. Every movement is a balanced set of signed entries summing to zero,
+Every movement is a balanced set of signed entries summing to zero,
 so a deposit can't just be "+5000 in a wallet" — it has to come from somewhere. I gave the gateway a
 clearing account: a deposit is "credit the user, debit `gateway_clearing`", a transfer is "debit one
 wallet, credit another." Since both are the same shape — move signed amounts between two accounts — user
@@ -55,21 +55,20 @@ physically can't credit twice.
 - `outbox_events` — durable side-effect log; unique `dedupe_key`, indexed `(status, available_at, id)`.
 - `audit_logs` — append-only record of non-money events (transitions, callback receipts) with request id.
 
-## Decisions I'd stand behind
+## Design Decisions
 
 ### Money is integer minor units, never a float
 
 Amounts are signed BIGINT in minor units; in code they're an immutable `Money` value object owning the
 arithmetic, currency checks, and positivity. Scales live in `config/wallet.php` (IRR 0, USD 2, BTC 8),
 so a new currency needs no schema change. Floats lose precision; `DECIMAL` bakes one scale into a column.
-The trade-off is BIGINT's ~9.2×10¹⁸ ceiling — far past any balance here. Nothing but integers and a
-currency code crosses the boundary.
+The trade-off is BIGINT's ~9.2×10¹⁸ ceiling — far past any balance here.
 
 ### Signed amounts and a transaction_group, not debit/credit columns
 
-Against a debit/credit-column layout or a journal-parent-plus-lines table (both fine), signed amounts
-plus a `transaction_group` UUID make the invariants trivial: a wallet's balance is `SUM(amount)`, and a
-movement balances when its legs `SUM()` to zero. `balance_after` on each entry lets support replay a
+Against a debit/credit-column layout, signed amounts plus a `transaction_group` UUID
+make the invariants trivial: a wallet's balance is `SUM(amount)`, and a movement balances
+when its legs `SUM()` to zero. `balance_after` on each entry lets support replay a
 wallet line by line and spot drift from the materialized balance.
 
 ### One writer for all money: `LedgerService::post()`
@@ -77,7 +76,7 @@ wallet line by line and spot drift from the materialized balance.
 Exactly one piece of code writes `ledger_entries` or touches `wallets.balance`; every flow goes through
 it. It runs in `DB::transaction(attempts: 3)` so deadlocks retry, locks the wallets with
 `lockForUpdate()` in ascending id order (consistent ordering is what prevents deadlocks), re-reads
-balances *after* locking, writes the legs, updates each balance and `version`, and records the outbox
+balances _after_ locking, writes the legs, updates each balance and `version`, and records the outbox
 row — all in one transaction, never calling anything external while holding locks. The isolation level
 barely matters here: REPEATABLE READ alone won't stop two transactions both reading a balance and both
 spending it. Safety is the explicit primary-key locks (so InnoDB takes precise row locks), the unique

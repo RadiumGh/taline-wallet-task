@@ -21,6 +21,7 @@ class LedgerEntry extends Model
         'currency',
         'amount',
         'balance_after',
+        'posting_key',
         'reference_type',
         'reference_id',
     ];

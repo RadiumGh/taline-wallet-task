@@ -7,6 +7,7 @@ namespace App\Domain\Observability;
 use App\Models\Deposit;
 use App\Models\Transfer;
 use App\Models\User;
+use App\Models\Withdrawal;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 
@@ -51,6 +52,39 @@ final class OperationRecorder
         $this->log('transfer.completed', $context);
     }
 
+    public function withdrawalRequested(Withdrawal $withdrawal, ?User $actor = null): void
+    {
+        $context = $this->withdrawalContext($withdrawal);
+        $this->audit->record('withdrawal.requested', $withdrawal, $context, $actor);
+        $this->metrics->increment('withdrawal.requested');
+        $this->metrics->histogram('withdrawal.volume', (float) $withdrawal->amount->amount, ['currency' => $withdrawal->amount->currency->code]);
+        $this->log('withdrawal.requested', $context);
+    }
+
+    public function withdrawalApproved(Withdrawal $withdrawal, ?User $actor = null): void
+    {
+        $context = $this->withdrawalContext($withdrawal);
+        $this->audit->record('withdrawal.approved', $withdrawal, $context, $actor);
+        $this->metrics->increment('withdrawal.approved');
+        $this->log('withdrawal.approved', $context);
+    }
+
+    public function withdrawalSettled(Withdrawal $withdrawal, ?User $actor = null): void
+    {
+        $context = $this->withdrawalContext($withdrawal);
+        $this->audit->record('withdrawal.settled', $withdrawal, $context, $actor);
+        $this->metrics->increment('withdrawal.settled');
+        $this->log('withdrawal.settled', $context);
+    }
+
+    public function withdrawalRejected(Withdrawal $withdrawal, ?User $actor = null): void
+    {
+        $context = $this->withdrawalContext($withdrawal);
+        $this->audit->record('withdrawal.rejected', $withdrawal, $context, $actor);
+        $this->metrics->increment('withdrawal.rejected');
+        $this->log('withdrawal.rejected', $context);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -75,6 +109,20 @@ final class OperationRecorder
             'to_wallet_id' => $transfer->to_wallet_id,
             'amount' => $transfer->amount->amount,
             'currency' => $transfer->amount->currency->code,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function withdrawalContext(Withdrawal $withdrawal): array
+    {
+        return [
+            'reference' => $withdrawal->reference,
+            'wallet_id' => $withdrawal->wallet_id,
+            'amount' => $withdrawal->amount->amount,
+            'currency' => $withdrawal->amount->currency->code,
+            'status' => $withdrawal->status->value,
         ];
     }
 
