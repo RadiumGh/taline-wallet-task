@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Domain\Withdrawal\WithdrawalOutcome;
+use App\Domain\Withdrawal\Enums\WithdrawalOutcome;
 use App\Domain\Withdrawal\WithdrawalReviewService;
 use App\Http\Requests\RejectWithdrawalRequest;
 use App\Http\Resources\WithdrawalResource;

@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace App\Domain\Withdrawal;
 
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
-use App\Domain\Money\Currency;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Currency;
+use App\Domain\Money\ValueObjects\Money;
 use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Domain\Wallet\SystemAccountResolver;
+use App\Domain\Withdrawal\Enums\WithdrawalStatus;
+use App\Domain\Withdrawal\Events\WithdrawalEvent;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\Withdrawal;

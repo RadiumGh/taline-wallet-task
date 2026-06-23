@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Idempotency\Enums\IdempotencyStatus;
 use App\Domain\Idempotency\Exceptions\IdempotencyConflictException;
 use App\Domain\Idempotency\Exceptions\MissingIdempotencyKeyException;
-use App\Domain\Idempotency\IdempotencyStatus;
-use App\Domain\Observability\MetricsRecorder;
+use App\Domain\Observability\Contracts\MetricsRecorder;
 use App\Models\IdempotencyKey;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;

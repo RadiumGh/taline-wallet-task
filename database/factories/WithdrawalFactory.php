@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Domain\Money\Money;
-use App\Domain\Withdrawal\WithdrawalStatus;
+use App\Domain\Money\ValueObjects\Money;
+use App\Domain\Withdrawal\Enums\WithdrawalStatus;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\Withdrawal;

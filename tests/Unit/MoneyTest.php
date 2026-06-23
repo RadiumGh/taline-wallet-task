@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Currency;
+use App\Domain\Money\ValueObjects\Money;
 
 function irr(int $amount): Money
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Money;
 use App\Domain\Transfer\TransferService;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;

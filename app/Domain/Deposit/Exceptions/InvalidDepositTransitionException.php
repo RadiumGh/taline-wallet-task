@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Deposit\Exceptions;
 
-use App\Domain\Deposit\DepositStatus;
+use App\Domain\Deposit\Enums\DepositStatus;
 use App\Exceptions\Contracts\HasHttpStatus;
 use RuntimeException;
 

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Domain\Deposit\CallbackOutcome;
+use App\Domain\Deposit\Data\GatewayCallbackData;
 use App\Domain\Deposit\DepositCallbackService;
-use App\Domain\Deposit\GatewayCallbackData;
+use App\Domain\Deposit\Enums\CallbackOutcome;
 use App\Http\Requests\StoreGatewayCallbackRequest;
 use App\Http\Resources\DepositResource;
 use App\Models\Deposit;

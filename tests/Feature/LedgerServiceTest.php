@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 use App\Domain\Ledger\Exceptions\InsufficientFundsException;
 use App\Domain\Ledger\Exceptions\UnbalancedLedgerPostException;
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Money;
 use App\Models\Deposit;
 use App\Models\LedgerEntry;
 use App\Models\Wallet;

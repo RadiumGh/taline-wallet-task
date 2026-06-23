@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Domain\Ledger\EntryDirection;
+use App\Domain\Ledger\Enums\EntryDirection;
 use App\Domain\Ledger\Exceptions\ImmutableLedgerEntryException;
-use App\Domain\Money\Currency;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Currency;
+use App\Domain\Money\ValueObjects\Money;
 use App\Models\Deposit;
 use App\Models\LedgerEntry;
 use App\Models\Wallet;

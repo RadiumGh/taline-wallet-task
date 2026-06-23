@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Domain\Gateway\PaymentGateway;
+use App\Domain\Gateway\Contracts\PaymentGateway;
 use App\Domain\Gateway\SimulatedPaymentGateway;
+use App\Domain\Observability\Contracts\MetricsRecorder;
 use App\Domain\Observability\LogMetricsRecorder;
-use App\Domain\Observability\MetricsRecorder;
-use App\Domain\Outbox\OutboxPublisher;
+use App\Domain\Outbox\Contracts\OutboxPublisher;
 use App\Domain\Outbox\QueueOutboxPublisher;
 use App\Http\Middleware\AuthenticateWithUserHeader;
 use App\Models\Deposit;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Ledger\Exceptions;
 
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Money;
 use RuntimeException;
 
 final class UnbalancedLedgerPostException extends RuntimeException

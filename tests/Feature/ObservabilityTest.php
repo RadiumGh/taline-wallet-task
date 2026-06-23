@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Money;
 use App\Domain\Observability\AuditLogger;
+use App\Domain\Observability\Contracts\MetricsRecorder;
 use App\Domain\Observability\Exceptions\ImmutableAuditLogException;
 use App\Domain\Observability\InMemoryMetricsRecorder;
-use App\Domain\Observability\MetricsRecorder;
 use App\Models\AuditLog;
 use App\Models\Deposit;
 use App\Models\Transfer;

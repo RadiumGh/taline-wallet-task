@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use App\Domain\Wallet\SystemAccountResolver;
+use App\Domain\Withdrawal\Enums\WithdrawalStatus;
 use App\Domain\Withdrawal\WithdrawalService;
-use App\Domain\Withdrawal\WithdrawalStatus;
 use App\Models\LedgerEntry;
 use App\Models\User;
 use App\Models\Wallet;

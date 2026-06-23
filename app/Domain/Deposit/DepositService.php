@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Domain\Deposit;
 
-use App\Domain\Money\Currency;
+use App\Domain\Deposit\Enums\DepositStatus;
+use App\Domain\Deposit\Events\DepositEvent;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Currency;
+use App\Domain\Money\ValueObjects\Money;
 use App\Domain\Observability\OperationRecorder;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Models\Deposit;

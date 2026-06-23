@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Money;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\DatabaseTruncation;

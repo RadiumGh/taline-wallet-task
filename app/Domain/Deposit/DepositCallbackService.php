@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Domain\Deposit;
 
+use App\Domain\Deposit\Data\GatewayCallbackData;
+use App\Domain\Deposit\Enums\CallbackOutcome;
+use App\Domain\Deposit\Enums\DepositStatus;
+use App\Domain\Deposit\Enums\GatewayCallbackType;
+use App\Domain\Deposit\Events\DepositEvent;
 use App\Domain\Deposit\Exceptions\InvalidDepositTransitionException;
+use App\Domain\Gateway\Contracts\PaymentGateway;
 use App\Domain\Gateway\Exceptions\InvalidGatewaySignatureException;
-use App\Domain\Gateway\PaymentGateway;
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
 use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Wallet\SystemAccountResolver;

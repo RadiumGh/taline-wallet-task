@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Domain\Idempotency\IdempotencyStatus;
-use App\Domain\Money\Money;
+use App\Domain\Idempotency\Enums\IdempotencyStatus;
+use App\Domain\Money\ValueObjects\Money;
 use App\Models\IdempotencyKey;
 use App\Models\Transfer;
 use App\Models\User;

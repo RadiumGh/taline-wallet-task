@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Domain\Deposit\DepositStatus;
+use App\Domain\Deposit\Enums\DepositStatus;
 
 test('a pending deposit may move to confirmed or failed', function () {
     expect(DepositStatus::Pending->canTransitionTo(DepositStatus::Confirmed))->toBeTrue()

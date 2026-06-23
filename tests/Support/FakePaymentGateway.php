@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
-use App\Domain\Gateway\GatewayDepositStatus;
-use App\Domain\Gateway\GatewayOutcome;
-use App\Domain\Gateway\PaymentGateway;
+use App\Domain\Gateway\Contracts\PaymentGateway;
+use App\Domain\Gateway\Data\GatewayDepositStatus;
+use App\Domain\Gateway\Enums\GatewayOutcome;
 
 final class FakePaymentGateway implements PaymentGateway
 {

@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use App\Domain\Ledger\Exceptions\LedgerAlreadyPostedException;
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
-use App\Domain\Money\Money;
-use App\Domain\Transfer\TransferStatus;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
+use App\Domain\Money\ValueObjects\Money;
+use App\Domain\Transfer\Enums\TransferStatus;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\User;

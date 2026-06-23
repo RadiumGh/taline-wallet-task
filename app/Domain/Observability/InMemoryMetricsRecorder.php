@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Observability;
 
+use App\Domain\Observability\Contracts\MetricsRecorder;
+
 final class InMemoryMetricsRecorder implements MetricsRecorder
 {
     /** @var list<array{metric: string, value: float, tags: array<string, string>}> */

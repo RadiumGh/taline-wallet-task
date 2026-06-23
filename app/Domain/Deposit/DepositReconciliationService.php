@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Domain\Deposit;
 
+use App\Domain\Deposit\Data\GatewayCallbackData;
+use App\Domain\Deposit\Data\ReconciliationReport;
+use App\Domain\Deposit\Enums\DepositStatus;
 use App\Domain\Deposit\Exceptions\InvalidDepositTransitionException;
-use App\Domain\Gateway\GatewayDepositStatus;
-use App\Domain\Gateway\GatewayOutcome;
-use App\Domain\Gateway\PaymentGateway;
+use App\Domain\Gateway\Contracts\PaymentGateway;
+use App\Domain\Gateway\Data\GatewayDepositStatus;
+use App\Domain\Gateway\Enums\GatewayOutcome;
 use App\Models\Deposit;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;

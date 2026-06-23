@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Outbox;
 
+use App\Domain\Outbox\Contracts\OutboxPublisher;
 use App\Jobs\SendOutboxNotification;
 use App\Models\OutboxEvent;
 

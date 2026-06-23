@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Domain\Deposit\DepositStatus;
+use App\Domain\Deposit\Enums\DepositStatus;
 use App\Domain\Wallet\SystemAccountResolver;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;

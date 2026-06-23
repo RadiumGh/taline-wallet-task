@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Money\Exceptions;
 
-use App\Domain\Money\Currency;
+use App\Domain\Money\ValueObjects\Currency;
 use App\Exceptions\Contracts\HasHttpStatus;
 use RuntimeException;
 

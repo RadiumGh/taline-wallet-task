@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Domain\Deposit\Data\GatewayCallbackData;
 use App\Domain\Deposit\DepositCallbackService;
-use App\Domain\Deposit\GatewayCallbackData;
 use App\Domain\Ledger\Exceptions\InsufficientFundsException;
-use App\Domain\Money\Money;
-use App\Domain\Outbox\OutboxPublisher;
+use App\Domain\Money\ValueObjects\Money;
+use App\Domain\Outbox\Contracts\OutboxPublisher;
+use App\Domain\Outbox\Enums\OutboxStatus;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Outbox\OutboxRelay;
-use App\Domain\Outbox\OutboxStatus;
+use App\Domain\Transfer\Enums\TransferStatus;
 use App\Domain\Transfer\TransferService;
-use App\Domain\Transfer\TransferStatus;
 use App\Jobs\SendOutboxNotification;
 use App\Models\Deposit;
 use App\Models\OutboxEvent;

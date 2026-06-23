@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\MoneyCast;
-use App\Domain\Ledger\EntryDirection;
+use App\Domain\Ledger\Enums\EntryDirection;
 use App\Domain\Ledger\Exceptions\ImmutableLedgerEntryException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

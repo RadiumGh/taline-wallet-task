@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Withdrawal\Exceptions;
 
-use App\Domain\Withdrawal\WithdrawalStatus;
+use App\Domain\Withdrawal\Enums\WithdrawalStatus;
 use App\Exceptions\Contracts\HasHttpStatus;
 use RuntimeException;
 

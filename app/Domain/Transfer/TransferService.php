@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Domain\Transfer;
 
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
-use App\Domain\Money\Money;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
+use App\Domain\Money\ValueObjects\Money;
 use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
+use App\Domain\Transfer\Enums\TransferStatus;
+use App\Domain\Transfer\Events\TransferEvent;
 use App\Domain\Transfer\Exceptions\SelfTransferException;
 use App\Domain\Wallet\Exceptions\WalletNotFoundException;
 use App\Models\Transfer;

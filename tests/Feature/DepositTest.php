@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use App\Domain\Deposit\DepositService;
-use App\Domain\Deposit\DepositStatus;
-use App\Domain\Money\Money;
+use App\Domain\Deposit\Enums\DepositStatus;
+use App\Domain\Money\ValueObjects\Money;
 use App\Models\Deposit;
 use App\Models\LedgerEntry;
 use App\Models\User;

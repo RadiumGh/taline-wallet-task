@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Currency;
-use App\Domain\Money\Money;
+use App\Domain\Money\ValueObjects\Currency;
+use App\Domain\Money\ValueObjects\Money;
+use App\Domain\Wallet\Enums\WalletType;
 use App\Domain\Wallet\Exceptions\SystemAccountNotFoundException;
 use App\Domain\Wallet\SystemAccountResolver;
-use App\Domain\Wallet\WalletType;
 use App\Models\Wallet;
 use Database\Seeders\SystemAccountsSeeder;
 use Illuminate\Database\QueryException;

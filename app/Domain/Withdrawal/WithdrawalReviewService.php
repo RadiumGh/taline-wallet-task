@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Domain\Withdrawal;
 
-use App\Domain\Ledger\LedgerLeg;
 use App\Domain\Ledger\LedgerService;
+use App\Domain\Ledger\ValueObjects\LedgerLeg;
 use App\Domain\Observability\OperationRecorder;
 use App\Domain\Outbox\OutboxRecorder;
 use App\Domain\Wallet\SystemAccountResolver;
+use App\Domain\Withdrawal\Enums\WithdrawalOutcome;
+use App\Domain\Withdrawal\Enums\WithdrawalStatus;
+use App\Domain\Withdrawal\Events\WithdrawalEvent;
 use App\Domain\Withdrawal\Exceptions\InvalidWithdrawalTransitionException;
 use App\Models\User;
 use App\Models\Withdrawal;

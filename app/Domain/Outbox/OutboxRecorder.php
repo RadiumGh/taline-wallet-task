@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Outbox;
 
+use App\Domain\Outbox\Enums\OutboxStatus;
 use App\Models\OutboxEvent;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Observability;
 
+use App\Domain\Observability\Contracts\MetricsRecorder;
+use App\Domain\Observability\Data\OperationEvent;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 

@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use App\Domain\Deposit\DepositReconciliationService;
-use App\Domain\Deposit\DepositStatus;
-use App\Domain\Gateway\GatewayOutcome;
-use App\Domain\Gateway\PaymentGateway;
+use App\Domain\Deposit\Enums\DepositStatus;
+use App\Domain\Gateway\Contracts\PaymentGateway;
+use App\Domain\Gateway\Enums\GatewayOutcome;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
 use App\Models\LedgerEntry;

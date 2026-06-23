@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Observability;
 
+use App\Domain\Observability\Contracts\MetricsRecorder;
 use Illuminate\Support\Facades\Log;
 
 final class LogMetricsRecorder implements MetricsRecorder

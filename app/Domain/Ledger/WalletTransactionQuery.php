@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Ledger;
 
+use App\Domain\Ledger\Enums\EntryDirection;
 use App\Models\Deposit;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;

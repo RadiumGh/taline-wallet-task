@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Domain\Deposit\Data\GatewayCallbackData;
 use App\Domain\Deposit\DepositCallbackService;
-use App\Domain\Deposit\DepositStatus;
-use App\Domain\Deposit\GatewayCallbackData;
+use App\Domain\Deposit\Enums\DepositStatus;
 use App\Models\Deposit;
 use App\Models\GatewayCallback;
 use App\Models\LedgerEntry;

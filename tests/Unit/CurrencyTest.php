@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\UnknownCurrencyException;
+use App\Domain\Money\ValueObjects\Currency;
 
 test('config exposes the currency registry with IRR scale 0', function () {
     expect(config('wallet.currencies.IRR.scale'))->toBe(0)

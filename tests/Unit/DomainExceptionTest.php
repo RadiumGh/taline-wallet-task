@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use App\Domain\Ledger\Exceptions\InsufficientFundsException;
-use App\Domain\Money\Currency;
 use App\Domain\Money\Exceptions\CurrencyMismatchException;
 use App\Domain\Money\Exceptions\UnknownCurrencyException;
+use App\Domain\Money\ValueObjects\Currency;
 use App\Exceptions\Contracts\HasHttpStatus;
 use App\Models\Wallet;
 
