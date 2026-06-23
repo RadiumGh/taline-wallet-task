@@ -49,7 +49,7 @@ final class DepositService
             return $this->findByKey($wallet, $idempotencyKey) ?? throw $e;
         }
 
-        $this->recorder->depositCreated($deposit, $user);
+        $this->recorder->record(DepositEvent::created($deposit, $user));
 
         return $deposit;
     }

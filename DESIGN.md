@@ -1,6 +1,7 @@
 # Design notes — Taline Wallet & Ledger
 
-The three endpoints — deposit, transfer, history — aren't the hard part. What makes this a money
+The core endpoints — deposit, transfer, history (plus the optional withdrawal flow) — aren't the hard
+part. What makes this a money
 system is everything that has to stay true when the network is flaky, callers retry, several servers
 hit the same wallet at once, and the gateway calls back more than once. So I built it around a few
 properties and let the endpoints fall out of them: a double-entry ledger as the source of truth, row
@@ -15,7 +16,9 @@ with a lifecycle, and a transactional outbox plus real observability for side ef
 - **Transfer** — `POST /api/transfers`, synchronous and atomic: debit sender, credit receiver, in one
   locked transaction.
 - **History** — `GET /api/wallets/{wallet}/transactions`, cursor-paginated with filters.
-- Underneath the three: a single money writer, the layered idempotency and outbox detailed below, a
+- **Withdrawal** (optional) — `POST /api/withdrawals` reserves funds into `withdrawal_clearing`; admin
+  `approve`/`settle`/`reject` endpoints drive the state machine, settling out or releasing the hold.
+- Underneath them: a single money writer, the layered idempotency and outbox detailed below, a
   reconciliation job for stuck deposits, and a concurrency suite on real MySQL.
 
 ## Data model
@@ -86,14 +89,15 @@ constraints, and idempotency.
 
 I assume every request and callback can arrive more than once, and guard each layer:
 
-1. HTTP middleware on the two POSTs requires an `Idempotency-Key` scoped per user: the first request
+1. HTTP middleware on the write POSTs (deposit, transfer, withdrawal request) requires an
+   `Idempotency-Key` scoped per user: the first request
    wins the `(scope, key)` race, a same-key/same-payload retry replays the stored response, a same-key/
    different-payload one is `409`, and a 5xx releases the key so a real retry isn't wedged.
 2. Unique DB constraints — deposits `(wallet_id, idempotency_key)`, transfers
-   `(from_wallet_id, idempotency_key)`, callbacks `(gateway, event_id)`, the ledger post guard, the
-   outbox `dedupe_key`.
+   `(from_wallet_id, idempotency_key)`, withdrawals `(wallet_id, idempotency_key)`, callbacks
+   `(gateway, event_id)`, the ledger post guard, the outbox `dedupe_key`.
 3. State machines that permit only legal transitions, so a duplicate terminal callback is a no-op.
-4. The ledger's unique `(reference, wallet)` guard under all of it.
+4. The ledger's unique `(reference, posting_key, wallet)` guard under all of it.
 
 At-least-once delivery plus idempotent processing gives effectively-once movement — the most you can
 honestly promise.
@@ -114,6 +118,28 @@ drives the transition through the same confirm/fail path — producing the same 
 event, and audit a webhook would. Safe to repeat: the pending filter, a deterministic dedup id, and the
 ledger guard each stop double resolution. The simulated gateway returns `Pending` today — the machinery
 is real and tested; live polling is where a production gateway slots in.
+
+### Withdrawals: reserve on request, settle or release on review
+
+A withdrawal is `requested → approved → settled`, or `rejected` from either of the first two. The
+reservation is the crux: rather than add a separate held-balance column, _request_ posts a real
+movement — debit the user wallet, credit a `withdrawal_clearing` system account — so the user's
+available balance _is_ `wallets.balance` and drops immediately and exactly once. Every existing debit
+path already honours it (a transfer can't spend reserved funds, because the balance is already gone),
+so reservation needed no change to the ledger or transfer logic. _Settle_ moves
+`withdrawal_clearing → withdrawal_payout` (the money has left the platform); _reject_ moves it back to
+the user. Settle and reject post fresh compensating movements rather than mutating the reservation, so
+the ledger stays append-only.
+
+This is the one flow where a single operation posts to the ledger more than once (reserve, then
+settle or reject), all against the same withdrawal row — which collided with the old anti-double-post
+guard `(reference, wallet)`. So entries carry a `posting_key` (`reservation` / `settlement` /
+`reversal`), and the guard became `(reference, posting_key, wallet)`; deposits and transfers default to
+`primary` and are unchanged. The admin steps reuse the deposit pattern: lock the row, allow only legal
+transitions, and treat a repeat of a completed step as `already_processed` — so approve/settle/reject
+are idempotent under retries, with the ledger guard as the deeper backstop against a double payout or
+double refund. Admin authority itself is _not_ modelled (any caller can review); real RBAC waits on
+real auth.
 
 ### A transactional outbox rather than `afterCommit()`
 
@@ -149,8 +175,8 @@ idempotency replays and outbox lag. Logs are structured and never carry the gate
 ## Left out, on purpose
 
 - **Real authentication** — out of scope; the caller is the `X-User-Id` header plus an ownership check.
-- **Withdrawals** — I designed the flow (request → approve → settle) but didn't build it; I'd rather
-  ship the core solid than half a fourth feature.
+  The withdrawal review steps are gated only by that shim — any caller can approve/settle, since admin
+  roles need real auth I didn't build.
 - **Multi-currency FX** — wallets are per-currency and the schema is ready for more, but there's no
   conversion; a cross-currency transfer is rejected, not converted.
 - **Dividing money** — `Money` only adds, subtracts, negates. The first proportional feature (fees,
@@ -178,7 +204,8 @@ idempotency replays and outbox lag. Logs are structured and never carry the gate
 
 ## What another week buys
 
-1. The withdrawal flow, with fund reservation and an admin approve/settle state machine.
+1. Real admin authorization for the withdrawal review steps (a role/policy gate, and no self-review),
+   once real auth replaces the `X-User-Id` shim.
 2. References-only API resources, so primary keys stop leaking.
 3. Real gateway polling in reconciliation, plus an alert on illegal transitions (a fail after a confirm
    is a page-someone event).

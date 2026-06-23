@@ -22,8 +22,7 @@ final class WithdrawalReviewService
         private readonly SystemAccountResolver $systemAccounts,
         private readonly OutboxRecorder $outbox,
         private readonly OperationRecorder $recorder,
-    ) {
-    }
+    ) {}
 
     public function approve(Withdrawal $withdrawal, User $reviewer): WithdrawalOutcome
     {
@@ -31,7 +30,7 @@ final class WithdrawalReviewService
             $locked->approved_at = now();
 
             $this->outbox->record($locked, 'withdrawal.approved', "withdrawal.approved:{$locked->getKey()}", $this->payload($locked));
-            $this->recorder->withdrawalApproved($locked, $reviewer);
+            $this->recorder->record(WithdrawalEvent::approved($locked, $reviewer));
         });
     }
 
@@ -49,7 +48,7 @@ final class WithdrawalReviewService
             $locked->settled_at = now();
 
             $this->outbox->record($locked, 'withdrawal.settled', "withdrawal.settled:{$locked->getKey()}", $this->payload($locked));
-            $this->recorder->withdrawalSettled($locked, $reviewer);
+            $this->recorder->record(WithdrawalEvent::settled($locked, $reviewer));
         });
     }
 
@@ -67,7 +66,7 @@ final class WithdrawalReviewService
             $locked->reason = $reason;
 
             $this->outbox->record($locked, 'withdrawal.rejected', "withdrawal.rejected:{$locked->getKey()}", $this->payload($locked));
-            $this->recorder->withdrawalRejected($locked, $reviewer);
+            $this->recorder->record(WithdrawalEvent::rejected($locked, $reviewer));
         });
     }
 
@@ -80,7 +79,7 @@ final class WithdrawalReviewService
                 return WithdrawalOutcome::AlreadyProcessed;
             }
 
-            if (!$locked->status->canTransitionTo($target)) {
+            if (! $locked->status->canTransitionTo($target)) {
                 throw InvalidWithdrawalTransitionException::from($locked->status, $target);
             }
 

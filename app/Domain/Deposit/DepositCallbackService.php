@@ -50,7 +50,7 @@ final class DepositCallbackService
                 'currency' => $locked->amount->currency->code,
             ]);
 
-            $this->recorder->depositConfirmed($locked);
+            $this->recorder->record(DepositEvent::confirmed($locked));
         });
     }
 
@@ -66,7 +66,7 @@ final class DepositCallbackService
                 'currency' => $locked->amount->currency->code,
             ]);
 
-            $this->recorder->depositFailed($locked);
+            $this->recorder->record(DepositEvent::failed($locked));
         });
     }
 

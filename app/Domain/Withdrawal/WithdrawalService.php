@@ -27,8 +27,7 @@ final class WithdrawalService
         private readonly SystemAccountResolver $systemAccounts,
         private readonly OutboxRecorder $outbox,
         private readonly OperationRecorder $recorder,
-    ) {
-    }
+    ) {}
 
     public function request(User $user, int $walletId, int $amount, string $currency, string $idempotencyKey): Withdrawal
     {
@@ -74,7 +73,7 @@ final class WithdrawalService
                     'currency' => $money->currency->code,
                 ]);
 
-                $this->recorder->withdrawalRequested($withdrawal, $user);
+                $this->recorder->record(WithdrawalEvent::requested($withdrawal, $user));
 
                 return $withdrawal;
             }, attempts: 3);

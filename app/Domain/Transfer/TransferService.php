@@ -67,7 +67,7 @@ final class TransferService
                     'currency' => $money->currency->code,
                 ]);
 
-                $this->recorder->transferCompleted($transfer, $sender);
+                $this->recorder->record(TransferEvent::completed($transfer, $sender));
 
                 return $transfer;
             }, attempts: 3);
