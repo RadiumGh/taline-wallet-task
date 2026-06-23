@@ -183,8 +183,12 @@ idempotency replays and outbox lag. Logs are structured and never carry the gate
   interest, splits) should add an explicit allocation method with a defined rounding rule rather than
   scattering `intdiv` and breaking the zero-sum invariant.
 - **A real reconciliation gateway** — the mechanism is built and tested; the live polling isn't.
-- **Cleaner public ids** — resources still expose raw auto-increment ids beside the UUID `reference`;
-  I'd rather expose only references and take them on input so primary keys never leak.
+- **Fully PK-free public ids** — operations are routed by their UUID `reference`, and ledger-history
+  lines now carry the operation's `reference` (not its raw `reference_id`) so a client can correlate a
+  line to the deposit/withdrawal it holds. What's left is deliberately deferred: wallets still have no
+  public `reference` (they're passed and returned as raw ids), and operation resources still emit `id`
+  beside `reference`. Closing that means a wallet UUID `reference`, accepting references on input, and
+  dropping the `id` — an API-contract change worth doing on purpose, not in passing.
 - **DB-level ledger immutability** — enforced in the model today; in production I'd add a trigger,
   restricted grants, or an append-only role.
 
@@ -206,7 +210,8 @@ idempotency replays and outbox lag. Logs are structured and never carry the gate
 
 1. Real admin authorization for the withdrawal review steps (a role/policy gate, and no self-review),
    once real auth replaces the `X-User-Id` shim.
-2. References-only API resources, so primary keys stop leaking.
+2. A fully PK-free contract: a wallet UUID `reference`, references accepted on input and returned in
+   place of raw wallet ids, and the redundant operation `id` dropped from resources.
 3. Real gateway polling in reconciliation, plus an alert on illegal transitions (a fail after a confirm
    is a page-someone event).
 4. Metrics and logs emitted from outbox consumers so they fire exactly once, instead of inside the money

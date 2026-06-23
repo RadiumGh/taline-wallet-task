@@ -23,7 +23,7 @@ class LedgerEntryResource extends JsonResource
             'balance_after' => $this->balance_after->amount,
             'direction' => $this->direction()->value,
             'reference_type' => strtolower(class_basename($this->reference_type)),
-            'reference_id' => $this->reference_id,
+            'reference' => $this->reference?->reference,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

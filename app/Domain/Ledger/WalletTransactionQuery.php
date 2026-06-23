@@ -9,13 +9,15 @@ use App\Models\Deposit;
 use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\Wallet;
+use App\Models\Withdrawal;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 
 final class WalletTransactionQuery
 {
-    private const REFERENCE_TYPES = [
+    public const REFERENCE_TYPES = [
         'deposit' => Deposit::class,
         'transfer' => Transfer::class,
+        'withdrawal' => Withdrawal::class,
     ];
 
     /**
@@ -23,7 +25,7 @@ final class WalletTransactionQuery
      */
     public function paginate(Wallet $wallet, array $filters, int $perPage): CursorPaginator
     {
-        $query = LedgerEntry::query()->where('wallet_id', $wallet->getKey());
+        $query = LedgerEntry::query()->with('reference')->where('wallet_id', $wallet->getKey());
 
         if (isset($filters['direction'])) {
             EntryDirection::from($filters['direction']) === EntryDirection::Credit

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Domain\Ledger\WalletTransactionQuery;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +16,7 @@ class IndexTransactionRequest extends FormRequest
             'cursor' => ['sometimes', 'string'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'direction' => ['sometimes', Rule::in(['credit', 'debit'])],
-            'reference_type' => ['sometimes', Rule::in(['deposit', 'transfer'])],
+            'reference_type' => ['sometimes', Rule::in(array_keys(WalletTransactionQuery::REFERENCE_TYPES))],
             'date_from' => ['sometimes', 'date'],
             'date_to' => ['sometimes', 'date'],
         ];

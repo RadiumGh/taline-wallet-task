@@ -8,6 +8,7 @@ use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\Withdrawal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -112,6 +113,22 @@ test('the reference_type filter narrows to one operation type', function () {
 
     expect($response->json('data'))->toHaveCount(1)
         ->and($response->json('data.0.reference_type'))->toBe('deposit');
+});
+
+test('the reference_type filter narrows to withdrawals and links the line to its operation reference', function () {
+    $user = User::factory()->create();
+    $wallet = Wallet::factory()->for($user)->create(['currency' => 'IRR']);
+    $deposit = Deposit::factory()->forWallet($wallet, 500)->create();
+    $withdrawal = Withdrawal::factory()->forWallet($wallet, 300)->create();
+    historyEntry($wallet, 500, $deposit);
+    historyEntry($wallet, -300, $withdrawal);
+
+    $response = history($user, $wallet, '?reference_type=withdrawal')->assertOk();
+
+    expect($response->json('data'))->toHaveCount(1)
+        ->and($response->json('data.0.reference_type'))->toBe('withdrawal')
+        ->and($response->json('data.0.reference'))->toBe($withdrawal->reference)
+        ->and($response->json('data.0'))->not->toHaveKey('reference_id');
 });
 
 test('date filters narrow the history window', function () {
