@@ -1,20 +1,21 @@
 # Taline Wallet & Ledger
 
 A production-minded slice of a digital wallet: **deposits** (async gateway confirm/fail callbacks),
-**transfers** (synchronous, atomic), and **cursor-paginated transaction history** — built on a
-double-entry ledger that stays correct under retries, concurrency, and non-exactly-once callbacks.
+**transfers** (synchronous, atomic), **cursor-paginated transaction history**, and a **withdrawal
+request flow** with admin approve/settle/reject — built on a double-entry ledger that stays correct
+under retries, concurrency, and non-exactly-once callbacks.
 
 The design rationale and trade-offs live in **[DESIGN.md](DESIGN.md)**. This file is how to run it.
 
 ## Stack
 
-- PHP 8.5, Laravel 13, Pest 4
+- PHP 8.3+, Laravel 13, Pest 4
 - MySQL 8 (real MySQL is required — see [Testing](#testing-real-mysql))
 - `database` queue & cache drivers (no Redis needed to run)
 
 ## Prerequisites
 
-- PHP 8.5 with `pdo_mysql` (and `pcntl` to run the concurrency suite)
+- PHP 8.3+ with `pdo_mysql` (and `pcntl` to run the concurrency suite)
 - Composer
 - A reachable MySQL 8 server
 
@@ -34,21 +35,34 @@ DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=taline_wallet_task
-DB_USERNAME=your_user
-DB_PASSWORD=your_password
+DB_USERNAME=taline
+DB_PASSWORD=taline
 
 # Required for the gateway callback HMAC to verify (any shared secret):
 WALLET_GATEWAY_SECRET=dev-gateway-secret
 ```
 
-Create the schema, run migrations, and seed system accounts + two demo users (Alice, Bob):
+The configured MySQL user runs the migrations, so it needs schema-level (DDL) privileges, not just
+read/write. The simplest grant for local use:
+
+```sql
+CREATE DATABASE IF NOT EXISTS taline_wallet_task;
+CREATE USER IF NOT EXISTS 'taline'@'127.0.0.1' IDENTIFIED BY 'taline';
+-- ALL PRIVILEGES covers CREATE / ALTER / INDEX / DROP / REFERENCES (foreign keys) + read/write:
+GRANT ALL PRIVILEGES ON taline_wallet_task.* TO 'taline'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+
+Use those same credentials in `.env` (or just point at your existing privileged user). Then run
+migrations and seed system accounts + two demo users (Alice, Bob):
 
 ```bash
 php artisan migrate --seed
 ```
 
-The seeder creates the `gateway_clearing` system account per currency and a wallet for each demo
-user. Note the seeded wallet ids (system accounts are created first):
+The seeder creates the system accounts per currency (`gateway_clearing`, `withdrawal_clearing`,
+`withdrawal_payout`) and a wallet for each demo user. Note the seeded wallet ids (system accounts are
+created first):
 
 ```bash
 php artisan tinker --execute="App\Models\Wallet::all(['id','user_id','type','code','currency'])->each(fn(\$w)=>print_r(\$w->toArray()));"
@@ -76,13 +90,19 @@ You can also invoke them directly: `php artisan outbox:relay`, `php artisan depo
 ## Testing (real MySQL)
 
 Tests run against a real MySQL schema, not SQLite, so locks, unique/CHECK constraints, and deadlock
-behaviour are genuinely exercised. Create the dedicated test schema once:
+behaviour are genuinely exercised. `phpunit.xml` overrides only the database name
+(`taline_wallet_task_test`) — host, port, and **credentials are inherited from your `.env`**, so the
+same user must also own the test schema. Create it once and grant that user the same DDL privileges
+(`RefreshDatabase` migrates the schema and the concurrency suite truncates it, both of which need
+CREATE/ALTER/DROP, not just read/write):
 
-```bash
-mysql -uYOUR_USER -p -h127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS taline_wallet_task_test"
+```sql
+CREATE DATABASE IF NOT EXISTS taline_wallet_task_test;
+GRANT ALL PRIVILEGES ON taline_wallet_task_test.* TO 'taline'@'127.0.0.1';
+FLUSH PRIVILEGES;
 ```
 
-`phpunit.xml` points the suite at `taline_wallet_task_test` over `127.0.0.1`. Run it with:
+Then run the suite:
 
 ```bash
 php artisan test
@@ -102,12 +122,12 @@ Auth is out of scope, so the caller is simulated with an `X-User-Id` header (an 
 middleware resolves the user). Money crosses the boundary as an **integer in minor units** paired
 with a `currency` code — never a float or decimal string (IRR has scale 0, so 5000 = 5000 IRR).
 
-| Header | Used by | Purpose |
-|---|---|---|
-| `X-User-Id` | deposit, transfer, history | the authenticated user |
-| `Idempotency-Key` | `POST` deposit, transfer | required; safe-retry key (scoped per user) |
-| `X-Gateway-Signature` | deposit callbacks | HMAC-SHA256 of the raw body, keyed by `WALLET_GATEWAY_SECRET` |
-| `X-Request-Id` | all | correlation id (assigned if absent, echoed back) |
+| Header                | Used by                                              | Purpose                                                          |
+| --------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| `X-User-Id`           | deposit, transfer, history, withdrawal, admin review | the authenticated user (acts as the reviewer on admin endpoints) |
+| `Idempotency-Key`     | `POST` deposit, transfer, withdrawal                 | required; safe-retry key (scoped per user/wallet)                |
+| `X-Gateway-Signature` | deposit callbacks                                    | HMAC-SHA256 of the raw body, keyed by `WALLET_GATEWAY_SECRET`    |
+| `X-Request-Id`        | all                                                  | correlation id (assigned if absent, echoed back)                 |
 
 Errors are returned as JSON `{ "error": "<code>", "message": "..." }` with an appropriate status
 (e.g. `422` insufficient funds / currency mismatch, `409` idempotency or illegal state transition,
@@ -179,11 +199,49 @@ curl -sS "http://127.0.0.1:8000/api/wallets/4/transactions?cursor=<next_cursor>"
   -H 'X-User-Id: 1'
 ```
 
-Filters: `direction` (`credit`/`debit`), `reference_type` (`deposit`/`transfer`),
+Filters: `direction` (`credit`/`debit`), `reference_type` (`deposit`/`transfer`/`withdrawal`),
 `date_from`, `date_to`, `per_page` (1–100).
 
-## Project docs
+### Withdrawal (request → admin review)
 
-- **[DESIGN.md](DESIGN.md)** — data model, key decisions and trade-offs, what was left out, and how
-  this scales.
-- `ai-docs/` — the implementation plan, per-step study notes, and the running tech-debt log.
+A withdrawal is a two-sided flow. The user **requests** it; an admin then **approves** and
+**settles** it (or **rejects** it). The state machine is `requested → approved → settled`, with
+`rejected` reachable from either `requested` or `approved`; `settled` and `rejected` are terminal.
+
+Requesting **reserves the funds immediately** — it debits the user wallet and credits the
+`withdrawal_clearing` system account, so the balance can't be double-spent while the request is in
+review. Settling moves the reserved funds from clearing to `withdrawal_payout`; rejecting reverses
+the reservation back to the wallet. Every step is one balanced ledger posting.
+
+```bash
+# 1. User requests a withdrawal (reserves funds, status "requested")
+curl -sS -X POST http://127.0.0.1:8000/api/withdrawals \
+  -H 'Content-Type: application/json' \
+  -H 'X-User-Id: 1' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"wallet_id": 4, "amount": 2000, "currency": "IRR"}'
+# -> 201 { "data": { "reference": "...", "status": "requested", ... } }
+```
+
+The admin endpoints are keyed by the withdrawal **reference** and carry the reviewer in `X-User-Id`:
+
+```bash
+REF=<withdrawal-reference-from-request>
+
+# 2. Approve  (requested -> approved)
+curl -sS -X POST "http://127.0.0.1:8000/api/admin/withdrawals/$REF/approve" -H 'X-User-Id: 1'
+
+# 3. Settle   (approved -> settled; pays out)
+curl -sS -X POST "http://127.0.0.1:8000/api/admin/withdrawals/$REF/settle"  -H 'X-User-Id: 1'
+
+# Or reject  (requested|approved -> rejected; refunds the wallet), with an optional reason
+curl -sS -X POST "http://127.0.0.1:8000/api/admin/withdrawals/$REF/reject" \
+  -H 'Content-Type: application/json' -H 'X-User-Id: 1' \
+  -d '{"reason": "failed AML check"}'
+# -> 200 { "result": "processed", "data": { "status": "rejected", "reason": "...", ... } }
+```
+
+Review steps are idempotent: repeating a step that already reached its target status is a no-op
+returning `"result": "already_processed"`; an illegal transition (e.g. settle before approve)
+returns `409`. Insufficient funds at request time and currency mismatch are rejected with typed
+`4xx` errors and reserve nothing.

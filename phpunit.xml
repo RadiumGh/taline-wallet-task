@@ -27,11 +27,8 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="mysql"/>
-        <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="3306"/>
+        <!-- Only the schema is overridden here; host/port/credentials come from your .env. -->
         <env name="DB_DATABASE" value="taline_wallet_task_test"/>
-        <env name="DB_USERNAME" value="radium"/>
-        <env name="DB_PASSWORD" value="RadiumGh76"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
